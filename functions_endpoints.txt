@@ -1,6 +1,9 @@
 //  stakemanager
 0xb6b55f25 = deposit
-0x227a473b = Stake()
+0x227a473b = Stake
+
+// token
+0x095ea7b3 = approve
 
 //  worksystem DataSpotting
 0xf716596d = register
