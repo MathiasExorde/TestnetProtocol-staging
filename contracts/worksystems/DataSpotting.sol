@@ -607,7 +607,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         if( DataBatch[AllocatedBatchCursor].allocated_to_work != true  
             && availableWorkers.length > 0 
             && DataBatch[AllocatedBatchCursor].complete
-            && (block.timestamp - LastAllocationTime) <= INTER_ALLOCATION_DURATION  ){ //nothing to allocate, waiting for this to end
+            && (block.timestamp - LastAllocationTime) >= INTER_ALLOCATION_DURATION  ){ //nothing to allocate, waiting for this to end
             AllocateWork();
             progress = true;
         }
@@ -635,7 +635,6 @@ contract DataSpotting is Ownable, RandomAllocator {
     @param _DataBatchId Integer identifier associated with target SpottedData
     */
     function ValidateDataBatch(uint256 _DataBatchId) internal {
-        require( (block.timestamp - LastAllocationTime) <= INTER_ALLOCATION_DURATION, "Last allocation was less than the INTER_ALLOCATION_DURATION duration"); // votes needs to be closed
         require( DataEnded(_DataBatchId) || ( DataBatch[_DataBatchId].unrevealed_workers == 0 ), "_DataBatchId has not ended, or not every voters have voted"); // votes needs to be closed
         require( DataBatch[_DataBatchId].checked == false, "_DataBatchId is already validated"); // votes needs to be closed
         bool isCheckPassed = isPassed(_DataBatchId);
@@ -771,7 +770,8 @@ contract DataSpotting is Ownable, RandomAllocator {
     /* 
     Allocate last data batch to be checked by K out N currently available workers.
      */
-    function AllocateWork() public  {
+    function AllocateWork() public  {        
+        require( (block.timestamp - LastAllocationTime) <= INTER_ALLOCATION_DURATION, "Last allocation was less than the INTER_ALLOCATION_DURATION duration"); // votes needs to be closed
         require(DataBatch[AllocatedBatchCursor].complete, "Can't allocate work, the current batch is not complete");
         require(DataBatch[AllocatedBatchCursor].allocated_to_work == false, "Can't allocate work, the current batch is already allocated");
         uint256 selected_k = Math.max( Math.min(availableWorkers.length, CONSENSUS_WORKER_SIZE), MIN_CONSENSUS_WORKER_COUNT); // pick at most CONSENSUS_WORKER_SIZE workers, minimum 1.
@@ -849,14 +849,14 @@ contract DataSpotting is Ownable, RandomAllocator {
     {
         // require(file_hashs.length == URL_domains.length, "SpotData: file_hashs and URL_domains must be of same length");
         // //_numTokens The number of tokens to be committed towards the target SpottedData
-        // uint256 _numTokens = MIN_STAKE;
+        uint256 _numTokens = MIN_STAKE;
         
         // // if msg.sender doesn't have enough voting rights,
         // // request for enough voting rights
-        // if (SpotStakedTokenBalance[msg.sender] < _numTokens) {
-        //     uint256 remainder = _numTokens.sub(SpotStakedTokenBalance[msg.sender]);
-        //     requestVotingRights(remainder);
-        // }
+        if (SpotStakedTokenBalance[msg.sender] < MIN_STAKE) {
+            uint256 remainder = _numTokens.sub(SpotStakedTokenBalance[msg.sender]);
+            requestVotingRights(remainder);
+        }
         for(uint256 i=0; i < file_hashs.length; i++){
             string memory file_hash = file_hashs[i];
             string memory URL_domain_ = URL_domains[i];
