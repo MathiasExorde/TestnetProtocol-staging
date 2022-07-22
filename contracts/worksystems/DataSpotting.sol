@@ -498,7 +498,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
     }
 
-    function isWorkerAllocatedToBatch(uint256 _DataBatchId, address _worker) internal view returns(bool){
+    function isWorkerAllocatedToBatch(uint256 _DataBatchId, address _worker) public view returns(bool){
         bool found = false;
         address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
         for(uint256 i = 0; i< allocated_workers_.length; i++){
