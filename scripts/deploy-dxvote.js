@@ -1,6 +1,7 @@
 /* eslint-disable no-case-declarations */
 require("@nomiclabs/hardhat-web3");
 
+
 const contentHash = require("content-hash");
 const IPFS = require("ipfs-core");
 
@@ -70,11 +71,17 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
       }
       return;
     }
-
+    const networkName = hre.network.name;
+    let deployer_account;
     // Get ETH accounts to be used
     const accounts = await web3.eth.getAccounts();
-
-    let deployer_account = accounts[8];
+    console.log("Current Network = ",networkName)
+    if(networkName == 'schain'){
+      deployer_account = accounts[0];
+    }
+    else{
+      deployer_account = accounts[8];
+    }
     console.log("Deployer account = ",deployer_account.toString())
 
     // Get fromBlock for network contracts
@@ -101,6 +108,33 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
       initialRep.push(initialRepHolder.amount.toString());
     });
 
+    // --------------------------------- EXISTING CONTRACTS ADDRESS ---------------------------------
+    let SFuelContractsAddress;
+    let ConfigRegistryAddress;
+    let AddressManagerAddress;
+    let DataArchiveAddress;
+    let EXDTTokenAddress;
+    let RewardsManagerAddress;
+    let StakingManagerAddress;
+    let ReputationAddress;
+    let AvatarAddress;
+    let ControllerAddress;
+
+    if(networkName == 'schain'){
+      SFuelContractsAddress = "0xd4E6CF86782A5C1169Dc852776fD06aF7d7F7cf8";
+      ConfigRegistryAddress = "0xCe14234596c50F344a7c12F0088cEA9aE4B27479";
+      AddressManagerAddress = "0x7Ec8B5a37e3157D3d952fa9322d0EB48E17B4588";
+      DataArchiveAddress = "0x973551222f26EeAB5B623e07963c9097604F131e";
+      EXDTTokenAddress = "0x2BC6eD43ea8CAE758D66924b1aFE389FE4da80fF";
+      StakingManagerAddress = "0xfB47065AcbFBE88c2bcD1343299DFcE97A40F17f";
+      RewardsManagerAddress = "0xef3bae0780A61d4AAc1bd0EF78575E2A6f1c35b4";
+
+      AvatarAddress = "0x69563775794f0A6AC531876ff57C66eE02D8C174";
+      ReputationAddress = "0xBE0494CaA93c2A38b0bF3aB7E6bE785898db847b";
+      ControllerAddress = "0xc7cD52126d58E93f8f1BabBDc6A8442d77522BDC";
+    }
+
+  
     // Deploy Multicall
     let multicall;
     console.log("Deploying Multicall...");
@@ -111,11 +145,15 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
 
     // Deploy Reputation
     let reputation;
-    console.log("Deploying DxReputation...");
-    reputation = await DxReputation.new();
+    // console.log("Deploying DxReputation...");
+    // reputation = await DxReputation.new();
+    
+    console.log("IMPORTING EXISTING Reputation at ", ReputationAddress);
+    reputation = await hre.ethers.getContractAt("DxReputation", ReputationAddress);
+    addresses["Reputation"] = reputation.address;
     console.log("Exorde Reputation deployed to:", reputation.address);
     networkContracts.reputation = reputation.address;
-    addresses["Reputation"] = reputation.address;
+    // addresses["Reputation"] = reputation.address;
     await waitBlocks(1);
 
     // Mint DXvote REP
@@ -139,16 +177,6 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     let tokenTotalSupply = ethers.utils.parseUnits("200000000.0", 18).toString()
     console.log(ethers.utils.parseUnits("200000000.0", 18).toString());
     
-    // --------------------------------- EXISTING CONTRACTS ADDRESS ---------------------------------
-    const SFuelContractsAddress = "0x14F52f3FC010ab6cA81568D4A6794D5eAB3c6155";
-    const ConfigRegistryAddress = "0x2773D1fE65e9c22CF8e6e77f4a10c318b8beb71f";
-    const AddressManagerAddress = "0x1A433De5E02D87F238AF3500b8C57DAe7BFb29a3";
-    const DataArchiveAddress = "0x94DbE547e79bc484A4Be6Bf2500ECda9F266F43d";
-    const EXDTTokenAddress = "0x013121200dfcb362a55561d84A193c990c42706f";
-    const StakingManagerAddress = "0x0b1387Eb5D17114a514660E9eEE20d9791a0C14A";
-    const RewardsManagerAddress = "0xfc7232748A612eB874C799C23e317F4df746006c";
-
-    0x2d7AD5B202f6FeEB7708563aacFC21c73fEE82F2
 
     for (const tokenToDeploy of deploymentConfig.tokens){
       console.log(
@@ -197,6 +225,11 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
       reputation.address
     );
     
+    console.log("IMPORTING EXISTING Avatar at ", AvatarAddress);
+    avatar = await hre.ethers.getContractAt("DxAvatar", AvatarAddress);
+    addresses["Avatar"] = avatar.address;
+    console.log("Exorde Avatar deployed to:", avatar.address);
+    
     await waitBlocks(1);
     avatar = await DxAvatar.new(
       "ExordeDAO",
@@ -217,8 +250,18 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     console.log("Deploying DxController...");
     controller = await DxController.new(avatar.address);
     console.log("ExordeDAO Controller deployed to:", controller.address);
+
+
+    // console.log("IMPORTING EXISTING Controller at ", ControllerAddress);
+    // controller = await hre.ethers.getContractAt("DxController", ControllerAddress);
+    // addresses["Controller"] = controller.address;
+    // console.log("Exorde Controller deployed to:", controller.address);
+
+
+
     await avatar.transferOwnership(controller.address);
-    await reputation.transferOwnership(controller.address);
+    // await reputation.transferOwnership(controller.address);
+
     networkContracts.controller = controller.address;
     addresses["Controller"] = controller.address;
     await waitBlocks(1);
@@ -361,6 +404,11 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     await sfuelcontract.addAddress(addresses["DataSpotting"])
     await sfuelcontract.addAddress(addresses["DataFormatting"])
 
+    if(networkName == 'schain'){
+      await spot_worksystem.updatesFuelFaucet(SFuelContractsAddress)
+      await format_worksystem.updatesFuelFaucet(SFuelContractsAddress)
+    }
+
 
     // -------------------------------------------------------------------------------------------------------
 
@@ -407,58 +455,58 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     // Only allow the functions mintReputation, burnReputation, genericCall, registerScheme and unregisterScheme to be
     // called to in the controller contract from a scheme that calls the controller.
     // This permissions makes the other functions inaccessible
-    const notAllowedControllerFunctions = [
-      controller.contract._jsonInterface.find(
-        method => method.name === "mintTokens"
-      ).signature,
-      controller.contract._jsonInterface.find(
-        method => method.name === "unregisterSelf"
-      ).signature,
-      controller.contract._jsonInterface.find(
-        method => method.name === "addGlobalConstraint"
-      ).signature,
-      controller.contract._jsonInterface.find(
-        method => method.name === "removeGlobalConstraint"
-      ).signature,
-      controller.contract._jsonInterface.find(
-        method => method.name === "upgradeController"
-      ).signature,
-      controller.contract._jsonInterface.find(
-        method => method.name === "sendEther"
-      ).signature,
-      controller.contract._jsonInterface.find(
-        method => method.name === "externalTokenTransfer"
-      ).signature,
-      controller.contract._jsonInterface.find(
-        method => method.name === "externalTokenTransferFrom"
-      ).signature,
-      controller.contract._jsonInterface.find(
-        method => method.name === "externalTokenApproval"
-      ).signature,
-      controller.contract._jsonInterface.find(
-        method => method.name === "metaData"
-      ).signature,
-    ];
+    // const notAllowedControllerFunctions = [
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "mintTokens"
+    //   ).signature,
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "unregisterSelf"
+    //   ).signature,
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "addGlobalConstraint"
+    //   ).signature,
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "removeGlobalConstraint"
+    //   ).signature,
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "upgradeController"
+    //   ).signature,
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "sendEther"
+    //   ).signature,
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "externalTokenTransfer"
+    //   ).signature,
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "externalTokenTransferFrom"
+    //   ).signature,
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "externalTokenApproval"
+    //   ).signature,
+    //   controller.contract._jsonInterface.find(
+    //     method => method.name === "metaData"
+    //   ).signature,
+    // ];
 
-    for (var i = 0; i < notAllowedControllerFunctions.length; i++) {
-      await permissionRegistry.setPermission(
-        NULL_ADDRESS,
-        avatar.address,
-        controller.address,
-        notAllowedControllerFunctions[i],
-        MAX_UINT_256,
-        false
-      );
-    }
+    // for (var i = 0; i < notAllowedControllerFunctions.length; i++) {
+    //   await permissionRegistry.setPermission(
+    //     NULL_ADDRESS,
+    //     avatar.address,
+    //     controller.address,
+    //     notAllowedControllerFunctions[i],
+    //     MAX_UINT_256,
+    //     false
+    //   );
+    // }
 
-    await permissionRegistry.setPermission(
-      NULL_ADDRESS,
-      avatar.address,
-      controller.address,
-      ANY_FUNC_SIGNATURE,
-      0,
-      true
-    );
+    // await permissionRegistry.setPermission(
+    //   NULL_ADDRESS,
+    //   avatar.address,
+    //   controller.address,
+    //   ANY_FUNC_SIGNATURE,
+    //   0,
+    //   true
+    // );
 
     console.log("Permission Registry deployed to:", permissionRegistry.address);
     networkContracts.permissionRegistry = permissionRegistry.address;
@@ -658,42 +706,42 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
       }
 
 
-      // Set the boostedVoteRequiredPercentage
-      if (schemeConfiguration.boostedVoteRequiredPercentage > 0) {
-        console.log(
-          "Setting boosted vote required percentage in voting machine..."
-        );
-        await controller.genericCall(
-          votingMachine.address,
-          web3.eth.abi.encodeFunctionCall(
-            {
-              name: "setBoostedVoteRequiredPercentage",
-              type: "function",
-              inputs: [
-                {
-                  type: "address",
-                  name: "_scheme",
-                },
-                {
-                  type: "bytes32",
-                  name: "_paramsHash",
-                },
-                {
-                  type: "uint256",
-                  name: "_boostedVotePeriodLimit",
-                },
-              ],
-            },
-            [
-              newScheme.address,
-              schemeParamsHash,
-              schemeConfiguration.boostedVoteRequiredPercentage,
-            ]
-          ),
-          avatar.address,
-          0
-        );
-      }
+      // // Set the boostedVoteRequiredPercentage
+      // if (schemeConfiguration.boostedVoteRequiredPercentage > 0) {
+      //   console.log(
+      //     "Setting boosted vote required percentage in voting machine..."
+      //   );
+      //   await controller.genericCall(
+      //     votingMachine.address,
+      //     web3.eth.abi.encodeFunctionCall(
+      //       {
+      //         name: "setBoostedVoteRequiredPercentage",
+      //         type: "function",
+      //         inputs: [
+      //           {
+      //             type: "address",
+      //             name: "_scheme",
+      //           },
+      //           {
+      //             type: "bytes32",
+      //             name: "_paramsHash",
+      //           },
+      //           {
+      //             type: "uint256",
+      //             name: "_boostedVotePeriodLimit",
+      //           },
+      //         ],
+      //       },
+      //       [
+      //         newScheme.address,
+      //         schemeParamsHash,
+      //         schemeConfiguration.boostedVoteRequiredPercentage,
+      //       ]
+      //     ),
+      //     avatar.address,
+      //     0
+      //   );
+      // }
 
       // Finally the scheme is configured and ready to be registered
       console.log("Registering scheme in controller...");
@@ -758,7 +806,7 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     console.log("permissionRegistry: transferOwnership...");
     await permissionRegistry.transferOwnership(avatar.address);
     console.log("dxDaoNFT: transferOwnership...");
-    await dxDaoNFT.transferOwnership(avatar.address);
+    // await dxDaoNFT.transferOwnership(avatar.address);
     console.log("controller: unregisterScheme...");
     await controller.unregisterScheme(accounts[0], avatar.address);
 
