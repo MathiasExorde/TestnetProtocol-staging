@@ -325,7 +325,7 @@ contract DataSpotting is Ownable, RandomAllocator {
 
         DataNonce = INITIAL_Data_NONCE;
         
-        MIN_STAKE = 25 * (10 ** 18); // 100 EXDT to participate
+        MIN_STAKE = 25 * (10 ** 18); 
         COMMIT_ROUND_DURATION = 180;
         REVEAL_ROUND_DURATION = 180;
         INTER_ALLOCATION_DURATION = 10;
@@ -607,7 +607,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         if( DataBatch[AllocatedBatchCursor].allocated_to_work != true  
             && availableWorkers.length > 0 
             && DataBatch[AllocatedBatchCursor].complete
-            && (block.timestamp - LastAllocationTime) >= INTER_ALLOCATION_DURATION  ){ //nothing to allocate, waiting for this to end
+            && ((block.timestamp - LastAllocationTime) >= INTER_ALLOCATION_DURATION) ){ //nothing to allocate, waiting for this to end
             AllocateWork();
             progress = true;
         }
@@ -771,50 +771,52 @@ contract DataSpotting is Ownable, RandomAllocator {
     Allocate last data batch to be checked by K out N currently available workers.
      */
     function AllocateWork() public  {        
-        require( (block.timestamp - LastAllocationTime) <= INTER_ALLOCATION_DURATION, "Last allocation was less than the INTER_ALLOCATION_DURATION duration"); // votes needs to be closed
         require(DataBatch[AllocatedBatchCursor].complete, "Can't allocate work, the current batch is not complete");
         require(DataBatch[AllocatedBatchCursor].allocated_to_work == false, "Can't allocate work, the current batch is already allocated");
         uint256 selected_k = Math.max( Math.min(availableWorkers.length, CONSENSUS_WORKER_SIZE), MIN_CONSENSUS_WORKER_COUNT); // pick at most CONSENSUS_WORKER_SIZE workers, minimum 1.
         uint256 n = availableWorkers.length;
 
-        ///////////////////////////// BATCH UPDATE STATE /////////////////////////////
-        DataBatch[AllocatedBatchCursor].unrevealed_workers = selected_k;
-        DataBatch[AllocatedBatchCursor].uncommited_workers = selected_k;
-        
-        uint256 _commitEndDate = block.timestamp.add(COMMIT_ROUND_DURATION);
-        uint256 _revealEndDate = _commitEndDate.add(REVEAL_ROUND_DURATION);
-        DataBatch[AllocatedBatchCursor].commitEndDate = _commitEndDate;
-        DataBatch[AllocatedBatchCursor].revealEndDate = _revealEndDate;
-        DataBatch[AllocatedBatchCursor].allocated_to_work = true;
-        //////////////////////////////////////////////////////////////////////////////
-        
-        require(selected_k>=1 && n>=1, "Fail during allocation: not enough workers");
-        uint256[] memory selected_workers_idx = random_selection(selected_k, n);
-        address[] memory selected_workers_addresses = new address[](selected_workers_idx.length);
-
-        for(uint i = 0; i<selected_workers_idx.length; i++){
-            selected_workers_addresses[i] = availableWorkers[ selected_workers_idx[i] ];
-        }
-
-        for(uint i = 0; i<selected_workers_idx.length; i++){      
-            address selected_worker_ = selected_workers_addresses[i];
-            WorkerState storage worker_state = WorkersState[selected_worker_];
-            ///// worker swapping from available to busy, not to be picked again while working.            
+        if((block.timestamp - LastAllocationTime) >= INTER_ALLOCATION_DURATION){
+                
+            ///////////////////////////// BATCH UPDATE STATE /////////////////////////////
+            DataBatch[AllocatedBatchCursor].unrevealed_workers = selected_k;
+            DataBatch[AllocatedBatchCursor].uncommited_workers = selected_k;
             
-            PopFromAvailableWorkers(selected_worker_);
-            if(!isInBusyWorkers(selected_worker_)){
-                busyWorkers.push(selected_worker_); //set worker as busy
+            uint256 _commitEndDate = block.timestamp.add(COMMIT_ROUND_DURATION);
+            uint256 _revealEndDate = _commitEndDate.add(REVEAL_ROUND_DURATION);
+            DataBatch[AllocatedBatchCursor].commitEndDate = _commitEndDate;
+            DataBatch[AllocatedBatchCursor].revealEndDate = _revealEndDate;
+            DataBatch[AllocatedBatchCursor].allocated_to_work = true;
+            //////////////////////////////////////////////////////////////////////////////
+            
+            require(selected_k>=1 && n>=1, "Fail during allocation: not enough workers");
+            uint256[] memory selected_workers_idx = random_selection(selected_k, n);
+            address[] memory selected_workers_addresses = new address[](selected_workers_idx.length);
+
+            for(uint i = 0; i<selected_workers_idx.length; i++){
+                selected_workers_addresses[i] = availableWorkers[ selected_workers_idx[i] ];
             }
-            WorkersPerBatch[AllocatedBatchCursor].push(selected_worker_);
-            ///// allocation
-            worker_state.allocated_work_batch = AllocatedBatchCursor;
-            worker_state.has_completed_work = false;
-            emit _WorkAllocated(AllocatedBatchCursor, selected_worker_);
+
+            for(uint i = 0; i<selected_workers_idx.length; i++){      
+                address selected_worker_ = selected_workers_addresses[i];
+                WorkerState storage worker_state = WorkersState[selected_worker_];
+                ///// worker swapping from available to busy, not to be picked again while working.            
+                
+                PopFromAvailableWorkers(selected_worker_);
+                if(!isInBusyWorkers(selected_worker_)){
+                    busyWorkers.push(selected_worker_); //set worker as busy
+                }
+                WorkersPerBatch[AllocatedBatchCursor].push(selected_worker_);
+                ///// allocation
+                worker_state.allocated_work_batch = AllocatedBatchCursor;
+                worker_state.has_completed_work = false;
+                emit _WorkAllocated(AllocatedBatchCursor, selected_worker_);
+            }
+            
+            LastAllocationTime = block.timestamp;
+            AllocatedBatchCursor = AllocatedBatchCursor.add(1);
+            AllTxsCounter += 1;
         }
-        
-        LastAllocationTime = block.timestamp;
-        AllocatedBatchCursor = AllocatedBatchCursor.add(1);
-        AllTxsCounter += 1;
     }
 
     /* To know if new work is available for worker's address user_ */
