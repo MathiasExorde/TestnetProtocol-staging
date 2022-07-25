@@ -145,7 +145,6 @@ interface ISpottingSystem {
         uint256 counter;
         uint256 uncommited_workers;
         uint256 unrevealed_workers;
-        uint256 item_count;
         bool complete;
         bool checked;
         bool allocated_to_work;
@@ -154,6 +153,7 @@ interface ISpottingSystem {
         uint256 votesFor;		                    // tally of spot-check-votes supporting proposal
         uint256 votesAgainst;                       // tally of spot-check-votes countering proposal
         string batchIPFSfile;                       // to be updated during SpotChecking
+        uint256 item_count;
         DataStatus status;                          // state of the vote
     }
 
@@ -161,19 +161,11 @@ interface ISpottingSystem {
         string ipfs_hash;                       // expiration date of commit period for SpottedData
         address author;                         // author of the proposal
         uint256 timestamp;                      // expiration date of commit period for SpottedData
+        uint256 item_count;
         string URL_domain;                      // URL domain
         string extra;                           // extra_data
         DataStatus status;                      // state of the vote
     }
-
-    
-    function getIPFShashesForBatch(uint256 _DataBatchId) external returns (string[] memory);
-
-    function getDomainsForBatch(uint256 _DataBatchId) external returns (string[] memory);
-
-    function getLastBatchId() external returns (uint256 LastBatchId);
-    
-    function getLastCheckedBatchId() external returns (uint256 LastCheckedBatchId);
     
     function getBatchByID(uint256 _DataBatchId) external returns (BatchMetadata memory batch);
     
@@ -301,7 +293,7 @@ contract DataFormatting is Ownable, RandomAllocator {
     uint256 constant MAX_TOTAL_WORKERS = 1000;
 
     uint256 public DATA_BATCH_SIZE = 1;
-    uint256 public CONSENSUS_WORKER_SIZE  = 3;
+    uint256 public CONSENSUS_WORKER_SIZE  = 2;
     uint256 public MIN_CONSENSUS_WORKER_COUNT  = 1;    
 
     uint256 public MIN_STAKE;
@@ -336,6 +328,7 @@ contract DataFormatting is Ownable, RandomAllocator {
     mapping(address => address[]) public MasterWorkers;
     address[] public availableWorkers;
     address[] public busyWorkers;   
+    address[] public toUnregisterWorkers;   
     mapping(uint256 => address[]) public WorkersPerBatch;
 
     address public sFuel = 0x14F52f3FC010ab6cA81568D4A6794D5eAB3c6155; //whispering turais testnet, sFuel top up contract
@@ -646,14 +639,12 @@ contract DataFormatting is Ownable, RandomAllocator {
         AllTxsCounter += 1;
     }
 
-
-
     ///////////////  ---------------------------------------------------------------------
     ///////////////              TRIGGER NEW EPOCH: DEPEND ON SPOTTING SYSTEM
     ///////////////  ---------------------------------------------------------------------
 
 
-    function Ping(uint256 CheckedBatchId) external returns(bool){
+    function Ping(uint256 CheckedBatchId) public{
         if(SpottingSystem != ISpottingSystem(address(0)) && !CollectedSpotBatchs[CheckedBatchId]){           // don't re import already collected batch 
 
             if( SpottingSystem.DataExists(CheckedBatchId)){                
@@ -688,21 +679,23 @@ contract DataFormatting is Ownable, RandomAllocator {
                     DataNonce = DataNonce + 1;
                     emit _FormatSubmitted(DataNonce, SpotBatch.batchIPFSfile, msg.sender);
                        
-                }    
+                }
                 // }
                 CollectedSpotBatchs[CheckedBatchId] = true;
             }            
         
         }
         AllTxsCounter += 1;
-        return false;
     }
 
 
 
     function TriggerNextEpoch() public topUpSFuel {
-        // require(DataBatch[AllocatedBatchCursor].complete || availableWorkers.length > 0, "TriggerNextEpoch: a batch must be completed, or enough workers must be available");
         bool progress = false;
+        // Log off waiting users first
+        if(toUnregisterWorkers.length > 0){
+            processLogoffRequests();
+        }
         // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
         if(DataBatch[BatchCheckingCursor].allocated_to_work == true && ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
             ValidateDataBatch(BatchCheckingCursor);            
@@ -723,7 +716,20 @@ contract DataFormatting is Ownable, RandomAllocator {
     }
 
 
+    /////////////
+    function processLogoffRequests() internal{
+        for (uint256 i = 0; i < toUnregisterWorkers.length; i++) {
+            address worker_addr_ = toUnregisterWorkers[i];
+            WorkerState storage worker_state = WorkersState[worker_addr_];
+            worker_state.registered = false;
+            worker_state.unregistration_request = false;
+            PopFromAvailableWorkers(worker_addr_);
+            PopFromBusyWorkers(worker_addr_);
+        }
+        delete toUnregisterWorkers;
+    }
 
+    /////////////
     function AreStringsEqual(string memory _a, string memory _b) public pure returns(bool){
         if (keccak256(abi.encodePacked(_a)) == keccak256(abi.encodePacked(_b))) {
             return true;

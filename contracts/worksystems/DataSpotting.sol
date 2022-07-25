@@ -132,7 +132,7 @@ interface IAddressManager {
 }
 
 interface IFormattingSystem {
-    function Ping(uint256 CheckedBatchId) external returns(bool);    
+    function Ping(uint256 CheckedBatchId) external;    
 }
 
 
@@ -251,8 +251,8 @@ contract DataSpotting is Ownable, RandomAllocator {
     uint256 constant INITIAL_Checks_NONCE = 0;
     uint256 constant MAX_TOTAL_WORKERS = 1000;
 
-    uint256 public DATA_BATCH_SIZE = 2;
-    uint256 public CONSENSUS_WORKER_SIZE  = 3;
+    uint256 public DATA_BATCH_SIZE = 1;
+    uint256 public CONSENSUS_WORKER_SIZE  = 2;
     uint256 public MIN_CONSENSUS_WORKER_COUNT  = 1;    
 
     uint256 public MIN_STAKE;
@@ -291,6 +291,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     mapping(address => address[]) public MasterWorkers;
     address[] public availableWorkers;
     address[] public busyWorkers;   
+    address[] public toUnregisterWorkers;   
     mapping(uint256 => address[]) public WorkersPerBatch;
 
     address public sFuel = 0x14F52f3FC010ab6cA81568D4A6794D5eAB3c6155; //whispering turais testnet, sFuel top up contract
@@ -555,6 +556,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         require(worker_state.registered == true, "Worker is not registered so can't unregister");
         if( worker_state.allocated_work_batch != 0 && worker_state.unregistration_request == false ){
             worker_state.unregistration_request = true;
+            toUnregisterWorkers.push(msg.sender);
         }
         else{                
             require(worker_state.allocated_work_batch == 0, "Worker currently has work allocated, can't be unregistered");
@@ -592,13 +594,14 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     ////////////////////////////////
     function TriggerNextEpoch()  public topUpSFuel {
-        // require(DataBatch[AllocatedBatchCursor].complete || availableWorkers.length > 0, "TriggerNextEpoch: a batch must be completed, or enough workers must be available");
         bool progress = false;
+        // Log off waiting users first
+        if(toUnregisterWorkers.length > 0){
+            processLogoffRequests();
+        }
         // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
         if( DataBatch[BatchCheckingCursor].allocated_to_work == true 
-            && 
-            ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
-
+            && ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
             ValidateDataBatch(BatchCheckingCursor);            
             BatchCheckingCursor = BatchCheckingCursor.add(1);        
             progress = true;
@@ -608,7 +611,7 @@ contract DataSpotting is Ownable, RandomAllocator {
             && availableWorkers.length > 0 
             && DataBatch[AllocatedBatchCursor].complete
             && ((block.timestamp - LastAllocationTime) >= INTER_ALLOCATION_DURATION) ){ //nothing to allocate, waiting for this to end
-            AllocateWork();
+            AllocateWork(); 
             progress = true;
         }
         // then move on with the next epoch, if not enough workers, we just stall until we get a new batch.
@@ -619,6 +622,21 @@ contract DataSpotting is Ownable, RandomAllocator {
         emit _NewEpoch(CurrentWorkEpoch);
     }
 
+    /////////////
+    function processLogoffRequests() internal{
+        for (uint256 i = 0; i < toUnregisterWorkers.length; i++) {
+            address worker_addr_ = toUnregisterWorkers[i];
+            WorkerState storage worker_state = WorkersState[worker_addr_];
+            worker_state.registered = false;
+            worker_state.unregistration_request = false;
+            PopFromAvailableWorkers(worker_addr_);
+            PopFromBusyWorkers(worker_addr_);
+        }
+        delete toUnregisterWorkers;
+    }
+
+
+    /////////////
     function AreStringsEqual(string memory _a, string memory _b) public pure returns(bool){
         if (keccak256(abi.encodePacked(_a)) == keccak256(abi.encodePacked(_b))) {
             return true;
@@ -744,7 +762,7 @@ contract DataSpotting is Ownable, RandomAllocator {
             DataBatch[_DataBatchId].status = DataStatus.APPROVED;
             AcceptedBatchsCounter += 1;
 
-            try FormattingSystem.Ping(_DataBatchId) returns(bool) {
+            try FormattingSystem.Ping(_DataBatchId){
                 AllTxsCounter += 1;
             } catch(bytes memory err) {
                 emit BytesFailure(err);
