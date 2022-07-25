@@ -115,23 +115,41 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     let DataArchiveAddress;
     let EXDTTokenAddress;
     let RewardsManagerAddress;
+    let MasterWalletAddress;
+    let PermissionRegistryAddress;
     let StakingManagerAddress;
     let ReputationAddress;
     let AvatarAddress;
     let ControllerAddress;
 
+
+    let IMPORT_DEPLOYED_CORE = true;
+    if(IMPORT_DEPLOYED_CORE){        
+      console.log("------------------- Deploying with predeployed contracts");
+    }
+    else{
+      console.log("------------------- Deploying from scratch");
+    }
+
+
     if(networkName == 'schain'){
-      SFuelContractsAddress = "0xd4E6CF86782A5C1169Dc852776fD06aF7d7F7cf8";
+      ReputationAddress = "0x15B6f5EC3F1027326c3a2805218Bd1eD44248997";
+      AvatarAddress = "0x2d9b914bA532b60f1920580111200460c65Cb6f3";
+      ControllerAddress = "0x156ed1ad9200a3196caA3b53F763174265f1312a";
+
+      MasterWalletAddress = "0xa78091792B52Ed86B80BE7c979F24F10E51AD363";
+      PermissionRegistryAddress = "0x5Af79217EFe46598B0987C940C9A61D0064Ad72f";
+      
+      
       ConfigRegistryAddress = "0xCe14234596c50F344a7c12F0088cEA9aE4B27479";
       AddressManagerAddress = "0x7Ec8B5a37e3157D3d952fa9322d0EB48E17B4588";
       DataArchiveAddress = "0x973551222f26EeAB5B623e07963c9097604F131e";
       EXDTTokenAddress = "0x2BC6eD43ea8CAE758D66924b1aFE389FE4da80fF";
-      StakingManagerAddress = "0xfB47065AcbFBE88c2bcD1343299DFcE97A40F17f";
-      RewardsManagerAddress = "0xef3bae0780A61d4AAc1bd0EF78575E2A6f1c35b4";
 
-      AvatarAddress = "0x69563775794f0A6AC531876ff57C66eE02D8C174";
-      ReputationAddress = "0xBE0494CaA93c2A38b0bF3aB7E6bE785898db847b";
-      ControllerAddress = "0xc7cD52126d58E93f8f1BabBDc6A8442d77522BDC";
+      StakingManagerAddress = "0x3078Ac027CD298850EE3e1F1676D897d3A2095Cb";
+      RewardsManagerAddress = "0x87433785Fd0423132429DD9E064FFE747F9c6283";
+
+      SFuelContractsAddress = "0xd4E6CF86782A5C1169Dc852776fD06aF7d7F7cf8";
     }
 
   
@@ -145,27 +163,29 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
 
     // Deploy Reputation
     let reputation;
-    // console.log("Deploying DxReputation...");
-    // reputation = await DxReputation.new();
+
     
-    console.log("IMPORTING EXISTING Reputation at ", ReputationAddress);
-    reputation = await hre.ethers.getContractAt("DxReputation", ReputationAddress);
-    addresses["Reputation"] = reputation.address;
-    console.log("Exorde Reputation deployed to:", reputation.address);
-    networkContracts.reputation = reputation.address;
-    // addresses["Reputation"] = reputation.address;
+    if(IMPORT_DEPLOYED_CORE){
+      console.log("IMPORTING EXISTING Reputation at ", ReputationAddress);
+      reputation = await hre.ethers.getContractAt("DxReputation", ReputationAddress);
+      addresses["Reputation"] = reputation.address;
+      console.log("Exorde Reputation deployed to:", reputation.address);
+      networkContracts.reputation = reputation.address;
+    }
+    else{
+      console.log("Deploying DxReputation...");
+      reputation = await DxReputation.new();
+      addresses["Reputation"] = reputation.address;
+      // Mint DXvote REP
+      console.log(
+        "mint initial REP to founders",
+      );
+      await reputation.mintMultiple(founders, initialRep);
+    }  
+
+
     await waitBlocks(1);
 
-    // Mint DXvote REP
-    console.log(
-      "mint initial REP to founders",
-    );
-    await reputation.mintMultiple(founders, initialRep);
-
-    console.log(
-      "waiting 1 blocks...",
-    );
-    await waitBlocks(1);
 
     // Deploy Tokens
     
@@ -219,48 +239,50 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
 
     // Deploy Avatar
     let avatar;
-    console.log(
-      "Deploying DxAvatar...",
-      tokens.EXDT.address,
-      reputation.address
-    );
     
-    console.log("IMPORTING EXISTING Avatar at ", AvatarAddress);
-    avatar = await hre.ethers.getContractAt("DxAvatar", AvatarAddress);
-    addresses["Avatar"] = avatar.address;
-    console.log("Exorde Avatar deployed to:", avatar.address);
-    
-    await waitBlocks(1);
-    avatar = await DxAvatar.new(
-      "ExordeDAO",
-      tokens.EXDT.address,
-      reputation.address
-    );
-    console.log("ExordeDAO Avatar deployed to:", avatar.address);
-    console.log("ExordeDAO Token deployed to:", tokens.EXDT.address);
+    if(IMPORT_DEPLOYED_CORE){
+      console.log("IMPORTING EXISTING Avatar at ", AvatarAddress);
+      avatar = await hre.ethers.getContractAt("DxAvatar", AvatarAddress);
+      addresses["Avatar"] = avatar.address;      
+      console.log("Exorde Avatar deployed to:", avatar.address);
+    }
+    else{
+      console.log(
+        "Deploying DxAvatar...",
+        tokens.EXDT.address,
+        reputation.address
+      );
+      avatar = await DxAvatar.new(
+        "Exorde Test DAO",
+        tokens.EXDT.address,
+        reputation.address
+      );
+      console.log("Exorde Avatar deployed to:", avatar.address);
+    } 
+
+    console.log("Exorde Token deployed to:", tokens.EXDT.address);
 
     networkContracts.avatar = avatar.address;
     networkContracts.token = addresses["EXDT"];
     addresses["Avatar"] = avatar.address;
     await waitBlocks(1);
 
-    
     // Deploy Controller and transfer avatar to controller
     let controller;
-    console.log("Deploying DxController...");
-    controller = await DxController.new(avatar.address);
-    console.log("ExordeDAO Controller deployed to:", controller.address);
-
-
-    // console.log("IMPORTING EXISTING Controller at ", ControllerAddress);
-    // controller = await hre.ethers.getContractAt("DxController", ControllerAddress);
-    // addresses["Controller"] = controller.address;
-    // console.log("Exorde Controller deployed to:", controller.address);
-
-
-
-    await avatar.transferOwnership(controller.address);
-    // await reputation.transferOwnership(controller.address);
+    
+    if(IMPORT_DEPLOYED_CORE){
+      console.log("IMPORTING EXISTING Controller at ", ControllerAddress);
+      controller = await hre.ethers.getContractAt("DxController", ControllerAddress);
+      addresses["Controller"] = controller.address;
+      console.log("Exorde Controller deployed to:", controller.address);
+    }
+    else{
+      console.log("Deploying DxController...");
+      controller = await DxController.new(avatar.address);
+      console.log("ExordeDAO Controller deployed to:", controller.address); 
+      await avatar.transferOwnership(controller.address);
+      await reputation.transferOwnership(controller.address);
+    }  
 
     networkContracts.controller = controller.address;
     addresses["Controller"] = controller.address;
@@ -278,22 +300,35 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     let rewards_manager;
     let address_manager;
     let data_archive;
-    // console.log("Deploying Staking Manager...");
-    // staking_manager = await StakingManager.new(tokens.EXDT.address);
-    // addresses["StakingManager"] = staking_manager.address;
 
-    console.log("IMPORTING EXISTING Staking Manager at ", StakingManagerAddress);
-    staking_manager = await hre.ethers.getContractAt("StakingManager", StakingManagerAddress);
-    addresses["StakingManager"] = staking_manager.address;
-    console.log("Staking Manager deployed to ", staking_manager.address);
-    // rewards_manager = await RewardsManager.new(tokens.EXDT.address);
-    // console.log("Rewards Manager deployed to ", rewards_manager.address);
-    // addresses["RewardsManager"] = rewards_manager.address;
     
-    console.log("IMPORTING EXISTING Rewards Manager at ", RewardsManagerAddress);
-    rewards_manager = await hre.ethers.getContractAt("RewardsManager", RewardsManagerAddress);
-    addresses["RewardsManager"] = rewards_manager.address;
-    console.log("Rewards Manager deployed to ", rewards_manager.address);
+    if(IMPORT_DEPLOYED_CORE){      
+      console.log("IMPORTING EXISTING Staking Manager at ", StakingManagerAddress);
+      staking_manager = await hre.ethers.getContractAt("StakingManager", StakingManagerAddress);
+      addresses["StakingManager"] = staking_manager.address;
+      console.log("Staking Manager deployed to ", staking_manager.address);
+    }
+    else{        
+      console.log("Deploying Staking Manager...");
+      staking_manager = await StakingManager.new(tokens.EXDT.address);
+      addresses["StakingManager"] = staking_manager.address;
+      console.log("Staking Manager deployed to ", staking_manager.address);
+    }  
+    
+
+    if(IMPORT_DEPLOYED_CORE){   
+      console.log("IMPORTING EXISTING Rewards Manager at ", RewardsManagerAddress);
+      rewards_manager = await hre.ethers.getContractAt("RewardsManager", RewardsManagerAddress);
+      addresses["RewardsManager"] = rewards_manager.address;
+      console.log("Rewards Manager deployed to ", rewards_manager.address); 
+    }
+    else{   
+      rewards_manager = await RewardsManager.new(tokens.EXDT.address);
+      console.log("Rewards Manager deployed to ", rewards_manager.address);
+      addresses["RewardsManager"] = rewards_manager.address;     
+      console.log("Rewards Manager deployed to ", rewards_manager.address); 
+    }  
+    
 
     console.log("IMPORTING EXISTING Address Manager at ", AddressManagerAddress);
     address_manager = await hre.ethers.getContractAt("AddressManager", AddressManagerAddress);
@@ -435,83 +470,96 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
 
     // Deploy PermissionRegistry to be used by WalletSchemes
     let permissionRegistry;
-    console.log("Deploying PermissionRegistry...");
-    permissionRegistry = await PermissionRegistry.new();
-    await permissionRegistry.initialize();
-    addresses["PermissionRegistry"] = permissionRegistry.address;
-
 
     
-    // Deploy Multicall
-    let randomallocator;
-    console.log("Deploying RandomAllocator...");
-    randomallocator = await RandomAllocator.new();
-    console.log("RandomAllocator deployed to:", randomallocator.address);
     
-    addresses["RandomAllocator"] = randomallocator.address;
-    await waitBlocks(1);
-    networkContracts.utils.randomallocator = randomallocator.address;
+    if(IMPORT_DEPLOYED_CORE){
+      console.log("IMPORTING EXISTING permissionRegistry at ", PermissionRegistryAddress);
+      permissionRegistry = await hre.ethers.getContractAt("PermissionRegistry", PermissionRegistryAddress);
+      addresses["PermissionRegistry"] = permissionRegistry.address;
+      console.log("PermissionRegistry deployed to:", permissionRegistry.address);
+    }
+    else{
+      console.log("Deploying PermissionRegistry...");
+      permissionRegistry = await PermissionRegistry.new();
+      await permissionRegistry.initialize();
+      addresses["PermissionRegistry"] = permissionRegistry.address;
 
-    // Only allow the functions mintReputation, burnReputation, genericCall, registerScheme and unregisterScheme to be
-    // called to in the controller contract from a scheme that calls the controller.
-    // This permissions makes the other functions inaccessible
-    // const notAllowedControllerFunctions = [
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "mintTokens"
-    //   ).signature,
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "unregisterSelf"
-    //   ).signature,
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "addGlobalConstraint"
-    //   ).signature,
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "removeGlobalConstraint"
-    //   ).signature,
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "upgradeController"
-    //   ).signature,
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "sendEther"
-    //   ).signature,
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "externalTokenTransfer"
-    //   ).signature,
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "externalTokenTransferFrom"
-    //   ).signature,
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "externalTokenApproval"
-    //   ).signature,
-    //   controller.contract._jsonInterface.find(
-    //     method => method.name === "metaData"
-    //   ).signature,
-    // ];
 
-    // for (var i = 0; i < notAllowedControllerFunctions.length; i++) {
-    //   await permissionRegistry.setPermission(
-    //     NULL_ADDRESS,
-    //     avatar.address,
-    //     controller.address,
-    //     notAllowedControllerFunctions[i],
-    //     MAX_UINT_256,
-    //     false
-    //   );
-    // }
+      // useless alone, so to delete
+      // // Deploy Multicall
+      // let randomallocator;
+      // console.log("Deploying RandomAllocator...");
+      // randomallocator = await RandomAllocator.new();
+      // console.log("RandomAllocator deployed to:", randomallocator.address);
+      
+      // addresses["RandomAllocator"] = randomallocator.address;
+      // await waitBlocks(1);
+      // networkContracts.utils.randomallocator = randomallocator.address;
 
-    // await permissionRegistry.setPermission(
-    //   NULL_ADDRESS,
-    //   avatar.address,
-    //   controller.address,
-    //   ANY_FUNC_SIGNATURE,
-    //   0,
-    //   true
-    // );
+      // Only allow the functions mintReputation, burnReputation, genericCall, registerScheme and unregisterScheme to be
+      // called to in the controller contract from a scheme that calls the controller.
+      // This permissions makes the other functions inaccessible
+      const notAllowedControllerFunctions = [
+        controller.contract._jsonInterface.find(
+          method => method.name === "mintTokens"
+        ).signature,
+        controller.contract._jsonInterface.find(
+          method => method.name === "unregisterSelf"
+        ).signature,
+        controller.contract._jsonInterface.find(
+          method => method.name === "addGlobalConstraint"
+        ).signature,
+        controller.contract._jsonInterface.find(
+          method => method.name === "removeGlobalConstraint"
+        ).signature,
+        controller.contract._jsonInterface.find(
+          method => method.name === "upgradeController"
+        ).signature,
+        controller.contract._jsonInterface.find(
+          method => method.name === "sendEther"
+        ).signature,
+        controller.contract._jsonInterface.find(
+          method => method.name === "externalTokenTransfer"
+        ).signature,
+        controller.contract._jsonInterface.find(
+          method => method.name === "externalTokenTransferFrom"
+        ).signature,
+        controller.contract._jsonInterface.find(
+          method => method.name === "externalTokenApproval"
+        ).signature,
+        controller.contract._jsonInterface.find(
+          method => method.name === "metaData"
+        ).signature,
+      ];
 
-    console.log("Permission Registry deployed to:", permissionRegistry.address);
-    networkContracts.permissionRegistry = permissionRegistry.address;
-    addresses["PermissionRegstry"] = permissionRegistry.address;
-    await waitBlocks(1);
+      for (var i = 0; i < notAllowedControllerFunctions.length; i++) {
+        await permissionRegistry.setPermission(
+          NULL_ADDRESS,
+          avatar.address,
+          controller.address,
+          notAllowedControllerFunctions[i],
+          MAX_UINT_256,
+          false
+        );
+      }
+
+      await permissionRegistry.setPermission(
+        NULL_ADDRESS,
+        avatar.address,
+        controller.address,
+        ANY_FUNC_SIGNATURE,
+        0,
+        true
+      );
+
+
+      console.log("Permission Registry deployed to:", permissionRegistry.address);
+      networkContracts.permissionRegistry = permissionRegistry.address;
+      addresses["PermissionRegstry"] = permissionRegistry.address;
+      await waitBlocks(1);
+    }  
+
 
     // Deploy ContributionReward Scheme
     console.log("Deploying ContributionReward scheme");
@@ -754,6 +802,14 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
 
       networkContracts.schemes[schemeConfiguration.name] = newScheme.address;
       addresses[schemeConfiguration.name] = newScheme.address;
+    }
+
+
+    if(IMPORT_DEPLOYED_CORE){
+      console.log("IMPORTING EXISTING masterWallet at ", MasterWalletAddress);
+      masterWallet = await hre.ethers.getContractAt("WalletScheme", MasterWalletAddress);
+      addresses["MasterWalletScheme"] = masterWallet.address;
+      console.log("MasterWalletScheme deployed to:", masterWallet.address);
     }
 
     // --------------------- MASTER WALLET REPUTATION FOR WORKSYSTEMS
