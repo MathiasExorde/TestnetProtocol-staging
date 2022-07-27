@@ -214,6 +214,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         bool registered;
         bool unregistration_request;
         uint256 registration_date;       
+        uint256 majority_counter;              
+        uint256 minority_counter;  
     }
     
     struct BatchMetadata {
@@ -263,7 +265,6 @@ contract DataSpotting is Ownable, RandomAllocator {
     uint256 public LastAllocationTime = 0;
 
     uint256 public MIN_REWARD_Data = 1 * (10 ** 18);
-    uint256 public MIN_REP_REVEAL = 1 * (10 ** 18);
     uint256 public MIN_REP_Data  = 25 * (10 ** 18);
     uint256 public VOTE_QUORUM  = 60;    
 
@@ -273,6 +274,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     mapping(uint256 => mapping(address => uint256)) public UserVotes;     // maps DataID -> user addresses ->  vote option
     mapping(uint256 => mapping(address => string)) public UserNewFiles;     // maps DataID -> user addresses -> ipfs string -> counter
     mapping(uint256 => mapping(address => uint256)) public UserBatchCounts;     // maps DataID -> user addresses -> ipfs string -> counter
+    mapping(uint256 => mapping(address => string)) public UserBatchFrom;     // maps DataID -> user addresses -> ipfs string -> counter
 
 
     mapping(address => DLL.SpottedData) dllMap;
@@ -410,6 +412,14 @@ contract DataSpotting is Ownable, RandomAllocator {
     {
         require(CONSENSUS_WORKER_SIZE_>=1);
         MIN_CONSENSUS_WORKER_COUNT  = CONSENSUS_WORKER_SIZE_;
+    }
+
+    function updateVoteQuoum(uint256 VOTE_QUORUM_)
+    public
+    onlyOwner
+    {
+        require(VOTE_QUORUM_>=0 && VOTE_QUORUM_<=100);
+        VOTE_QUORUM  = VOTE_QUORUM_;
     }
 
     // --------------- SFUEL MANAGEMENT SYSTEM ---------------
@@ -655,58 +665,20 @@ contract DataSpotting is Ownable, RandomAllocator {
     function ValidateDataBatch(uint256 _DataBatchId) internal {
         require( DataEnded(_DataBatchId) || ( DataBatch[_DataBatchId].unrevealed_workers == 0 ), "_DataBatchId has not ended, or not every voters have voted"); // votes needs to be closed
         require( DataBatch[_DataBatchId].checked == false, "_DataBatchId is already validated"); // votes needs to be closed
-        bool isCheckPassed = isPassed(_DataBatchId);
         address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
         string[] memory proposedNewFiles = new string[](allocated_workers_.length);
         uint256[] memory proposedBatchCounts = new uint256[](allocated_workers_.length);
         
         // -------------------------------------------------------------
-        // assess result of the vote
+        // GATHER USER SUBMISSIONS AND VOTE INPUTS BEFORE ASSESSMENT
         for (uint256 i = 0; i < allocated_workers_.length; i++) {
             address worker_addr_ = allocated_workers_[i];
-            uint256 worker_vote_ = UserVotes[_DataBatchId][worker_addr_];
-            bool has_worker_voted_ = UserChecksReveals[worker_addr_][_DataBatchId];  
-
-            //  ASSESS WHAT IS THE MAJORITY VOTE ON THE NEW FILEHASH
             string memory worker_proposed_new_file_ = UserNewFiles[_DataBatchId][worker_addr_];
-            proposedNewFiles[i] = worker_proposed_new_file_;
             uint256 worker_proposed_new_count_ = UserBatchCounts[_DataBatchId][worker_addr_];
+            proposedNewFiles[i] = worker_proposed_new_file_;
             proposedBatchCounts[i] = worker_proposed_new_count_;
-        
-            // Worker state update
-            //// because was busy a task, remove the worker from the busy pool
-            PopFromBusyWorkers(worker_addr_);
-            WorkerState storage worker_state = WorkersState[worker_addr_];
-
-            if(has_worker_voted_){
-                // mark that worker has completed job, no matter the reward
-                WorkersState[worker_addr_].has_completed_work = true;
-                if( (isCheckPassed == true && worker_vote_ == 1)
-                    || (isCheckPassed == false && worker_vote_ != 1) ){
-                    // vote 1 == OK, else = NOT OK, rejected     
-                    // reward worker if he voted like the majority             
-                    require(RepManager.mintReputationForWork(MIN_REP_Data, worker_addr_, ""), "could not reward REP in TriggerCheckSpot, 1.a");
-                    require(RewardManager.ProxyAddReward(MIN_REWARD_Data, worker_addr_), "could not reward token in TriggerCheckSpot, 1.b");
-                }
-                // mark worker back available, removed from the busy list, if the worker has not requested unregistration
-                if(worker_state.registered){ // only if the worker is still registered, of course.
-                    if(!isInAvailableWorkers(worker_addr_) && (worker_state.unregistration_request == false)){
-                        availableWorkers.push(worker_addr_);
-                    }
-                }
-            }
-            // if worker has not voted, he is disconnected "by force" OR if asked to be unregistered
-            // this worker will have to register again
-            else if( worker_state.unregistration_request || has_worker_voted_ == false ){                      
-                if(worker_state.registered){ // only if the worker is still registered
-                    worker_state.registered = false;
-                    PopFromAvailableWorkers(worker_addr_);
-                    PopFromBusyWorkers(worker_addr_);
-                }
-            }
-            // General Worker State Update
-            worker_state.allocated_work_batch == 0;
         }
+
         // -------------------------------------------------------------
         // MAJORITY QUORUM COMPUTATION
         uint256 majority_min_count = Math.max(allocated_workers_.length * VOTE_QUORUM / 100, 1);
@@ -748,6 +720,51 @@ contract DataSpotting is Ownable, RandomAllocator {
                 break;
             }
         }
+
+        // -------------------------------------------------------------
+        // ASSESS VOTE RESULT AND REWARD USERS ACCORDINGLY
+        bool isCheckPassed = isPassed(_DataBatchId);
+
+        for (uint256 i = 0; i < allocated_workers_.length; i++) {
+            address worker_addr_ = allocated_workers_[i];
+            uint256 worker_vote_ = UserVotes[_DataBatchId][worker_addr_];
+            bool has_worker_voted_ = UserChecksReveals[worker_addr_][_DataBatchId];  
+
+            // Worker state update
+            //// because was busy a task, remove the worker from the busy pool
+            PopFromBusyWorkers(worker_addr_);
+            WorkerState storage worker_state = WorkersState[worker_addr_];
+
+            if(has_worker_voted_){
+                // mark that worker has completed job, no matter the reward
+                WorkersState[worker_addr_].has_completed_work = true;
+                // then assess if worker is in the majority to reward him
+                if( (isCheckPassed == true && worker_vote_ == 1)
+                    || (isCheckPassed == false && worker_vote_ != 1) ){
+                    // vote 1 == OK, else = NOT OK, rejected     
+                    // reward worker if he voted like the majority             
+                    require(RepManager.mintReputationForWork(MIN_REP_Data, worker_addr_, ""), "could not reward REP in TriggerCheckSpot, 1.a");
+                    require(RewardManager.ProxyAddReward(MIN_REWARD_Data, worker_addr_), "could not reward token in TriggerCheckSpot, 1.b");
+                }
+                // mark worker back available, removed from the busy list, if the worker has not requested unregistration
+                if(worker_state.registered){ // only if the worker is still registered, of course.
+                    if(!isInAvailableWorkers(worker_addr_) && (worker_state.unregistration_request == false)){
+                        availableWorkers.push(worker_addr_);
+                    }
+                }
+            }
+            // if worker has not voted, he is disconnected "by force" OR if asked to be unregistered
+            // this worker will have to register again
+            else if( worker_state.unregistration_request || has_worker_voted_ == false ){                      
+                if(worker_state.registered){ // only if the worker is still registered
+                    worker_state.registered = false;
+                    PopFromAvailableWorkers(worker_addr_);
+                    PopFromBusyWorkers(worker_addr_);
+                }
+            }
+            // General Worker State Update
+            worker_state.allocated_work_batch == 0;
+        }
         // -------------------------------------------------------------
         // BATCH STATE UPDATE: mark it checked, final.
         DataBatch[_DataBatchId].checked = true;
@@ -756,12 +773,21 @@ contract DataSpotting is Ownable, RandomAllocator {
         // -------------------------------------------------------------
         // IF THE DATA BLOCK IS ACCEPTED
         if(isCheckPassed){           
-            //reward Spotter         
-            require(RepManager.mintReputationForWork(MIN_REP_Data, SpotsMapping[_DataBatchId].author, ""), "could not reward REP in TriggerCheckSpot, 2.a");
-            require(RewardManager.ProxyAddReward(MIN_REWARD_Data, SpotsMapping[_DataBatchId].author), "could not reward token in TriggerCheckSpot, 2.b");
+            // Reward Spotters involved in the Batch
+            uint256 start_batch_idx = DataBatch[_DataBatchId].start_idx;
+            uint256 end_batch_idx = DataBatch[_DataBatchId].start_idx + DataBatch[_DataBatchId].counter;
+            
+            for(uint256 l = start_batch_idx; l < end_batch_idx; l++){
+                address spot_author_ = SpotsMapping[l].author;
+                require(RepManager.mintReputationForWork(MIN_REP_Data, spot_author_, ""), "could not reward REP in TriggerCheckSpot, 2.a");
+                require(RewardManager.ProxyAddReward(MIN_REWARD_Data, spot_author_), "could not reward token in TriggerCheckSpot, 2.b");
+            }
+
+            // UPDATE BATCH STATE
             DataBatch[_DataBatchId].status = DataStatus.APPROVED;
             AcceptedBatchsCounter += 1;
 
+            // SEND THIS BATCH TO THIS FORMATTING SYSTEM
             try FormattingSystem.Ping(_DataBatchId){
                 AllTxsCounter += 1;
             } catch(bytes memory err) {
@@ -937,7 +963,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     // @ _prevDataID The ID of the SpottedData that the user has voted the maximum number of tokens in which is still less than or equal to numTokens
     */
     
-    function commitSpotCheck(uint256 _DataBatchId, bytes32 _secretHash, string memory newIPFSHash, uint256 _BatchCount) public topUpSFuel {
+    function commitSpotCheck(uint256 _DataBatchId, bytes32 _secretHash, string memory newIPFSHash, uint256 _BatchCount, string memory _From) public topUpSFuel {
         require(commitPeriodActive(_DataBatchId), "commit period needs to be open for this batchId");
         require(!UserChecksCommits[msg.sender][_DataBatchId], "User has already commited to this batchId");
         require(isWorkerAllocatedToBatch(_DataBatchId, msg.sender), "User needs to be allocated to this batch to commit on it");
@@ -977,6 +1003,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         store.setAttribute(UUID, "commitHash", uint256(_secretHash));
         UserNewFiles[_DataBatchId][msg.sender] = newIPFSHash;
         UserBatchCounts[_DataBatchId][msg.sender] = _BatchCount;
+        UserBatchFrom[_DataBatchId][msg.sender] = _From;
+
 
         // ----------------------- WORKER STATE UPDATE -----------------------
         WorkerState storage worker_state = WorkersState[msg.sender];
