@@ -142,8 +142,8 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
       
       
       ConfigRegistryAddress = "0xCe14234596c50F344a7c12F0088cEA9aE4B27479";
-      AddressManagerAddress = "0x7Ec8B5a37e3157D3d952fa9322d0EB48E17B4588";
-      DataArchiveAddress = "0x973551222f26EeAB5B623e07963c9097604F131e";
+      AddressManagerAddress = "0x124D104c12f01c76bbcc9f6f35a14512fBF1088A";
+      DataArchiveAddress = "0xA60Fd6b88F3252d345B205BeB1070bBFfaB8dFc1";
       EXDTTokenAddress = "0x2BC6eD43ea8CAE758D66924b1aFE389FE4da80fF";
 
       StakingManagerAddress = "0x3078Ac027CD298850EE3e1F1676D897d3A2095Cb";
@@ -359,14 +359,23 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
       },
     });
 
-    const _DataSpottingFactory = await DataSpottingFactory.deploy(tokens.EXDT.address);
+    // const _DataSpottingFactory = await DataSpottingFactory.deploy(tokens.EXDT.address);
 
-    await _DataSpottingFactory.deployed();
+    // await _DataSpottingFactory.deployed();
 
 
-    console.log("DataSpotting deployed to ", _DataSpottingFactory.address);
-    spot_worksystem = _DataSpottingFactory;
-    addresses["DataSpotting"] = _DataSpottingFactory.address;
+    // console.log("DataSpotting deployed to ", _DataSpottingFactory.address);
+    // spot_worksystem = _DataSpottingFactory;
+    // addresses["DataSpotting"] = _DataSpottingFactory.address;
+
+    let _dataspot_addr = "0x9b8Efb8fE2A16395B91d3DD450B8ced634Fdf887";
+    console.log("IMPORTING EXISTING DataSpotting at ", _dataspot_addr);
+    spot_worksystem = await hre.ethers.getContractAt("DataSpotting", _dataspot_addr);
+    addresses["DataSpotting"] = spot_worksystem.address;
+    console.log("Exorde DataSpotting deployed to:", spot_worksystem.address);
+
+
+
     // register the worksystem as allowed to use stakes
     console.log("Add the DataSpotting as allowed to use stakes in StakingManager");
     await staking_manager.addAddress(spot_worksystem.address);    
@@ -395,13 +404,23 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
       },
     });
 
-    const _DataFormattingFactory = await DataFormattingFactory.deploy(tokens.EXDT.address);
-    await _DataFormattingFactory.deployed();
+    // const _DataFormattingFactory = await DataFormattingFactory.deploy(tokens.EXDT.address);
+    // await _DataFormattingFactory.deployed();
 
 
-    console.log("DataFormatting deployed to ", _DataFormattingFactory.address);
-    format_worksystem = _DataFormattingFactory;
-    addresses["DataFormatting"] = _DataFormattingFactory.address;
+    // console.log("DataFormatting deployed to ", _DataFormattingFactory.address);
+    // format_worksystem = _DataFormattingFactory;
+    // addresses["DataFormatting"] = _DataFormattingFactory.address;
+
+    
+    let _dataformat_addr = "0xFbE992AE24d574495c42fd7AcDB96074Aa60388A";
+    console.log("IMPORTING EXISTING DataFormatting at ", _dataspot_addr);
+    format_worksystem = await hre.ethers.getContractAt("DataFormatting", _dataformat_addr);
+    addresses["DataFormatting"] = format_worksystem.address;
+    console.log("Exorde DataSpotting deployed to:", format_worksystem.address);
+
+
+
     // register the worksystem as allowed to use stakes
     console.log("Add the DataFormatting as allowed to use stakes in StakingManager");
     await staking_manager.addAddress(format_worksystem.address);    
