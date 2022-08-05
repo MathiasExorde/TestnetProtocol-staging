@@ -140,22 +140,22 @@ interface IFormattingSystem {
         FLAGGED
     }
 
+    
     struct BatchMetadata {
         uint256 start_idx;
-        uint256 end_idx;
         uint256 counter;
+        uint256 uncommited_workers;
         uint256 unrevealed_workers;
+        uint256 item_count;
         bool complete;
         bool checked;
         bool allocated_to_work;
-        uint256 commitEndDate;                      // expiration date of commit period for poll
-        uint256 revealEndDate;                      // expiration date of reveal period for poll
-        uint256 votesFor;		                    // tally of spot-check-votes supporting proposal
-        uint256 votesAgainst;                       // tally of spot-check-votes countering proposal
-        string batchIPFSfile;                       // to be updated during SpotChecking
-        DataStatus status;                          // state of the vote
-        string[] flags;                             // string tags
-        uint256[] flags_id;                         // id of tags
+        uint256 commitEndDate;                     // expiration date of commit period for poll
+        uint256 revealEndDate;                     // expiration date of reveal period for poll
+        uint256 votesFor;		                    // tally of format-check-votes supporting proposal
+        uint256 votesAgainst;                      // tally of format-check-votes countering proposal
+        string batchIPFSfile;                       // to be updated during FormatChecking
+        DataStatus status;                 // state of the vote
     }
 
     struct FormattedData {
@@ -163,12 +163,7 @@ interface IFormattingSystem {
         address author;                         // author of the proposal
         uint256 timestamp;                      // expiration date of commit period for FormattedData
         DataStatus status;                 // state of the vote
-        // string URL_domain;                      // URL domain
-        // string[] tags;                          // string tags
-        // uint256[] tags_id;                      // id of tags
-        // string extra;                          // extra_data
     }
-
     function getIPFShashesForBatch(uint256 _DataBatchId) external returns (string[] memory);
 
     function getDomainsForBatch(uint256 _DataBatchId) external returns (string[] memory);
