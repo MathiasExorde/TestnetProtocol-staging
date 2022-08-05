@@ -7,24 +7,16 @@
       "inputs": [
         {
           "internalType": "address",
-          "name": "_address",
+          "name": "_master",
           "type": "address"
-        }
-      ],
-      "name": "addAddress",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
+        },
         {
           "internalType": "address",
           "name": "_address",
           "type": "address"
         }
       ],
-      "name": "isSenderMasterOf",
+      "name": "AreMasterSubLinked",
       "outputs": [
         {
           "internalType": "bool",
@@ -39,11 +31,73 @@
       "inputs": [
         {
           "internalType": "address",
+          "name": "_worker",
+          "type": "address"
+        }
+      ],
+      "name": "FetchHighestMaster",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_worker",
+          "type": "address"
+        }
+      ],
+      "name": "getMaster",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
           "name": "_master",
           "type": "address"
         }
       ],
-      "name": "isSenderSubOf",
+      "name": "getMasterSubs",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_master",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "_address",
+          "type": "address"
+        }
+      ],
+      "name": "isMasterOf",
       "outputs": [
         {
           "internalType": "bool",
@@ -67,7 +121,7 @@
           "type": "address"
         }
       ],
-      "name": "isSubAddress",
+      "name": "isSubWorkerOf",
       "outputs": [
         {
           "internalType": "bool",
@@ -75,19 +129,6 @@
           "type": "bool"
         }
       ],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "_address",
-          "type": "address"
-        }
-      ],
-      "name": "removeAddress",
-      "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
     }
