@@ -140,7 +140,6 @@ interface IFormattingSystem {
         FLAGGED
     }
 
-    
     struct BatchMetadata {
         uint256 start_idx;
         uint256 counter;
@@ -224,7 +223,6 @@ contract DataArchive is Ownable, RandomAllocator {
     event _WorkerRegistered(address indexed worker, uint256 timestamp);
     event _WorkerUnregistered(address indexed worker, uint256 timestamp);
 
-    event _NewEpoch(uint256 indexed epochNumber);
     event _VotingRightsGranted(uint256 numTokens, address indexed voter);
     event _VotingRightsWithdrawn(uint256 numTokens, address indexed voter);
     event _TokensRescued(uint256 indexed DataID, address indexed voter);
@@ -313,7 +311,6 @@ contract DataArchive is Ownable, RandomAllocator {
     // mapping(address => DLL2.FormattedData) dllMap;
     // AttributeStore2.FormattedData store;
     
-    // uint256 public CurrentWorkEpoch = 0;
     uint256 public DataNonce = 0;
     
 
@@ -575,9 +572,8 @@ contract DataArchive is Ownable, RandomAllocator {
 
 
     ///////////////  ---------------------------------------------------------------------
-    ///////////////              TRIGGER NEW EPOCH: DEPEND ON SPOTTING SYSTEM
+    ///////////////              INPUT FROM PREVIOUS DATA SYSTEM: CHECKED SPOT BATCHES
     ///////////////  ---------------------------------------------------------------------
-
 
     function Ping(uint256 CheckedBatchId) public returns(bool){
         if(FormattingSystem != IFormattingSystem(address(0)) && !CollectedFormatBatchs[CheckedBatchId]){           // don't re import already collected batch 
@@ -597,7 +593,6 @@ contract DataArchive is Ownable, RandomAllocator {
                         status: DataStatus.TBD
                     });
 
-                    // TriggerNextEpoch();
                     DataNonce = DataNonce + 1;
                     emit _DataArchive(DataNonce, FormatBatch.batchIPFSfile, msg.sender);
                        
@@ -630,27 +625,32 @@ contract DataArchive is Ownable, RandomAllocator {
     }
 
 
-    // function TriggerNextEpoch() public  {
-    //     // require(DataBatch[AllocatedBatchCursor].complete || availableWorkers.length > 0, "TriggerNextEpoch: a batch must be completed, or enough workers must be available");
-    //     bool progress = false;
-    //     // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
-    //     if( DataBatch[AllocatedBatchCursor].allocated_to_work != true  && availableWorkers.length > 0 && DataBatch[AllocatedBatchCursor].complete  ){ //nothing to allocate, waiting for this to end
-    //         AllocateWork();
-    //         progress = true;
+    // function TriggerUpdate() public topUpSFuel {
+    //     // Log off waiting users first
+    //     if(toUnregisterWorkers.length > 0){
+    //         processLogoffRequests();
+    //     }        
+    //     for(uint256 i=0; i< Parameters.get_MAX_UPDATE_ITERATIONS() ;i++){
+    //         bool progress = false;
+    //         // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
+    //         if(DataBatch[BatchCheckingCursor].allocated_to_work == true && ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
+    //             ValidateDataBatch(BatchCheckingCursor);            
+    //             BatchCheckingCursor = BatchCheckingCursor.add(1);        
+    //             progress = true;
+    //         }
+    //         // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
+    //         if( DataBatch[AllocatedBatchCursor].allocated_to_work != true  
+    //             && availableWorkers.length >= Parameters.get_FORMAT_MIN_CONSENSUS_WORKER_COUNT()
+    //             && DataBatch[AllocatedBatchCursor].complete  ){ //nothing to allocate, waiting for this to end
+    //             AllocateWork();
+    //             progress = true;
+    //         }
+    //         if(!progress){
+    //             // break from the loop if no more progress is made when iterating (no batch to validate, no work to allocate)
+    //             break;
+    //         }
     //     }
-    //     // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
-    //     else if(DataBatch[BatchCheckingCursor].allocated_to_work == true && ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
-    //         ValidateDataBatch(BatchCheckingCursor);            
-    //         BatchCheckingCursor = BatchCheckingCursor.add(1);        
-    //         progress = true;
-    //     }
-    //     // then move on with the next epoch, if not enough workers, we just stall until we get a new batch.
-    //     if(progress){
-    //         CurrentWorkEpoch = CurrentWorkEpoch.add(1);   
-    //     }
-    //     emit _NewEpoch(CurrentWorkEpoch);
     // }
-
 
 
     function AreStringsEqual(string memory _a, string memory _b) public pure returns(bool){
@@ -1205,13 +1205,7 @@ contract DataArchive is Ownable, RandomAllocator {
         return  AllTxsCounter;
     }
     
-    // /**
-    // @notice getLastBachDataId
-    // @return WorkEpoch of the last Dataed a user started
-    // */
-    // function getCurrentWorkEpoch() public view returns (uint256 WorkEpoch) {
-    //     return  CurrentWorkEpoch;
-    // }
+
     // /**
     // @notice Determines DataCommitEndDate
     // @return commitEndDate indication of whether Dataing period is over

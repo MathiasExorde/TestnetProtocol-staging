@@ -108,6 +108,33 @@ library DLL2 {
 
 
 
+interface IParametersManager {
+      // -------------- GETTERS : GENERAL --------------------
+    function getMaxTotalWorkers() external view returns(uint256);
+    function getVoteQuorum() external view returns(uint256);
+    function get_MAX_UPDATE_ITERATIONS() external view returns(uint256);
+    function get_MAX_CONTRACT_STORED_BATCHES() external view returns(uint256);
+    function get_MAX_SUCCEEDING_NOVOTES() external view returns(uint256);
+    function get_NOVOTE_REGISTRATION_WAIT_DURATION() external view returns(uint256);
+    // -------------- GETTERS : ADDRESSES --------------------    
+    function getStakeManager() external view returns(address);
+    function getRepManager() external view returns(address);
+    function getRewardManager() external view returns(address);
+    function getSpottingSystem() external view returns(address);
+    function getFormattingSystem() external view returns(address);
+    function getsFuelSystem() external view returns(address);
+    function getExordeToken() external view returns(address);
+    // -------------- GETTERS : FORMATTING --------------------
+    function get_FORMAT_DATA_BATCH_SIZE() external view returns(uint256);
+    function get_FORMAT_MIN_STAKE() external view returns(uint256);
+    function get_FORMAT_MIN_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+    function get_FORMAT_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+    function get_FORMAT_COMMIT_ROUND_DURATION() external view returns(uint256);
+    function get_FORMAT_REVEAL_ROUND_DURATION() external view returns(uint256);
+    function get_FORMAT_MIN_REWARD_Data() external view returns(uint256);
+    function get_FORMAT_MIN_REP_Data() external view returns(uint256);
+}
+
 interface IStakeManager {
     function ProxyStakeAllocate(uint256 _StakeAllocation, address _stakeholder) external returns(bool);
     function ProxyStakeDeallocate(uint256 _StakeToDeallocate, address _stakeholder) external returns(bool);
@@ -211,11 +238,8 @@ contract DataFormatting is Ownable, RandomAllocator {
     //         - Flagged Content: 0.1%
     // ================================================================================================
 
-    
-    // ============
-    // EVENTS:
-    // ============
 
+    // ============ EVENTS ============
     event _FormatSubmitted(uint256 indexed DataID, string file_hash, address  sender);
     event _FormatCheckCommitted(uint256 indexed DataID, uint256 numTokens, address indexed voter);
     event _FormatCheckRevealed(uint256 indexed DataID, uint256 numTokens, uint256 votesFor, uint256 votesAgainst, uint256 indexed choice, address indexed voter);
@@ -223,27 +247,26 @@ contract DataFormatting is Ownable, RandomAllocator {
     event _WorkAllocated(uint256 indexed batchID, address worker);
     event _WorkerRegistered(address indexed worker, uint256 timestamp);
     event _WorkerUnregistered(address indexed worker, uint256 timestamp);
-
-    event _NewEpoch(uint256 indexed epochNumber);
     event _StakeAllocated(uint256 numTokens, address indexed voter);
     event _VotingRightsWithdrawn(uint256 numTokens, address indexed voter);
     event _TokensRescued(uint256 indexed DataID, address indexed voter);
+    event _DataBatchDeleted(uint256 indexed batchID);
 
-    // ============
-    // FormattedData STRUCTURES:
-    // ============
-
+    // ============ LIBRARIES ============
     using AttributeStore2 for AttributeStore2.FormattedData;
     using DLL2 for DLL2.FormattedData;
     using SafeMath for uint256;
     
+
+    // ============ DATA STRUCTURES ============
     enum DataStatus{
         TBD,
         APPROVED,
         REJECTED,
         FLAGGED
     }
-
+    
+    // ------ Worker State Structure
     struct WorkerState {
         address worker_address;                 // worker address
         uint256 allocated_work_batch;
@@ -257,6 +280,8 @@ contract DataFormatting is Ownable, RandomAllocator {
         uint256 minority_counter;  
     }
     
+
+    // ------ Data batch Structure
     struct BatchMetadata {
         uint256 start_idx;
         uint256 counter;
@@ -274,6 +299,7 @@ contract DataFormatting is Ownable, RandomAllocator {
         DataStatus status;                 // state of the vote
     }
 
+    // ------ Atomic Data Structure
     struct FormattedData {
         string ipfs_hash;                      // expiration date of commit period for FormattedData
         address author;                         // author of the proposal
@@ -281,29 +307,11 @@ contract DataFormatting is Ownable, RandomAllocator {
         DataStatus status;                 // state of the vote
     }
 
-    // ============
-    // STATE VARIABLES:
-    // ============
+    // ====================================
+    //        GLOBAL STATE VARIABLES
+    // ====================================
 
-    uint256 constant INITIAL_Data_NONCE = 0;
-    uint256 constant INITIAL_Checks_NONCE = 0;
-    uint256 constant MAX_TOTAL_WORKERS = 1000;
-
-    uint256 public DATA_BATCH_SIZE = 1;
-    uint256 public CONSENSUS_WORKER_SIZE  = 2;
-    uint256 public MIN_CONSENSUS_WORKER_COUNT  = 1;    
-
-    uint256 public MIN_STAKE;
-    uint256 public COMMIT_ROUND_DURATION;
-    uint256 public REVEAL_ROUND_DURATION;        
-    uint256 public MIN_REWARD_Data = 1 * (10 ** 18);
-    uint256 public MIN_REP_REVEAL = 1 * (10 ** 18);
-    uint256 public MIN_REP_Data  = 75 * (10 ** 18);
-    uint256 public VOTE_QUORUM  = 50;
-    
-    uint256 public MAX_SUCCEEDING_NOVOTES  = 3;    
-    uint256 public NOVOTE_REGISTRATION_WAIT_DURATION  = 3600;    // in seconds
-
+    // ------ User (workers) Submissions & Commitees Related Structures
     mapping(address => mapping(uint256 => bool)) public UserChecksCommits;     // indicates whether an address committed a format-check-vote for this poll
     mapping(address => mapping(uint256 => bool)) public UserChecksReveals;     // indicates whether an address revealed a format-check-vote for this poll
     mapping(uint256 => mapping(address => uint256)) public UserVotes;     // maps DataID -> user addresses ->  vote option
@@ -311,63 +319,58 @@ contract DataFormatting is Ownable, RandomAllocator {
     mapping(uint256 => mapping(address => uint256)) public UserBatchCounts;     // maps DataID -> user addresses -> ipfs string -> counter
     mapping(uint256 => mapping(address => string)) public UserBatchFrom;     // maps DataID -> user addresses -> ipfs string -> counter
 
-    mapping(uint256 => bool) public CollectedSpotBatchs; // maps DataID to FormattedData struct
-    
+    // ------ Backend Data Stores
     mapping(address => DLL2.FormattedData) dllMap;
     AttributeStore2.FormattedData store;
-    
-    uint256 public CurrentWorkEpoch = 0;
-    uint256 public DataNonce = 0;
-    
-
-    mapping(address => WorkerState) public WorkersState;
     mapping(uint256 => FormattedData) public FormatsMapping; // maps DataID to FormattedData struct
+    mapping(uint256 => BatchMetadata) public DataBatch; // refers to FormattedData indices
+    
+    // ------ Worker & Stake related structure
+    mapping(address => WorkerState) public WorkersState;
     mapping(address => uint256) public FormatStakedTokenBalance; // maps user's address to voteToken balance
 
-
+    // ------ Worker management structures
     mapping(address => address[]) public MasterWorkers;
+    mapping(uint256 => address[]) public WorkersPerBatch;
+    mapping(uint256 => bool) public CollectedSpotBatchs; // Related to previous system
     address[] public availableWorkers;
     address[] public busyWorkers;   
     address[] public toUnregisterWorkers;   
-    mapping(uint256 => address[]) public WorkersPerBatch;
+    
+    // ------ Fuel Auto Top Up system
+    address public sFuel;  // owner of sFuelDistributor needs to whitelist this contract
 
-    address public sFuel = 0x14F52f3FC010ab6cA81568D4A6794D5eAB3c6155; //whispering turais testnet, sFuel top up contract
-    // owner of sFuelDistributor / Faucet needs to whitelist this contract
-
-
+    // ------ Processes counters
+    uint256 public DataNonce = 0;    
+    // -- Batches Counters
+    uint256 public BatchDeletionCursor = 1;
     uint256 public LastBatchCounter = 1;
     uint256 public BatchCheckingCursor = 1;
     uint256 public AllocatedBatchCursor = 1;
-    mapping(uint256 => BatchMetadata) public DataBatch; // refers to FormattedData indices
     
-    
+    // ------ Statistics related counters    
     uint256 public AllTxsCounter = 0;
     uint256 public AcceptedBatchsCounter = 0;
     uint256 public RejectedBatchsCounter = 0;
     uint256 public NotCommitedCounter = 0;
     uint256 public NotRevealedCounter = 0;
 
+    // ------ Addresses & Interfaces
     IERC20 public token;
     IStakeManager public StakeManager;
     IRepManager public RepManager;
     IRewardManager public RewardManager;
     IAddressManager public AddressManager;
-
     ISpottingSystem public SpottingSystem;
     IArchiveSystem public ArchiveSystem;
+    IParametersManager public Parameters;
 
-
+    // ============================================================================================================
     /**
     @dev Initializer. Can only be called once.
     */
     constructor(address EXDT_token)  {        
         token = IERC20(EXDT_token);
-
-        DataNonce = INITIAL_Data_NONCE;
-        
-        MIN_STAKE = 25 * (10 ** 18); // 100 EXDT to participate
-        COMMIT_ROUND_DURATION = 450;
-        REVEAL_ROUND_DURATION = 120;
     }
     
 
@@ -406,7 +409,6 @@ contract DataFormatting is Ownable, RandomAllocator {
         ArchiveSystem = IArchiveSystem(addr);
     }
 
-
     function updateAddressManager(address addr)
     public
     onlyOwner
@@ -414,73 +416,18 @@ contract DataFormatting is Ownable, RandomAllocator {
         AddressManager  = IAddressManager(addr);
     }
 
-    function updateDataBachSize(uint256 size)
+    function updateParametersManager(address addr)
     public
     onlyOwner
     {
-        DATA_BATCH_SIZE  = size;
+        Parameters = IParametersManager(addr);
     }
+
+    // ----------------------------------------------------------------------------------
+    //                          DATA DELETION FUNCTIONS
+    // ----------------------------------------------------------------------------------
     
-    function updateCommitRoundDuration(uint256 COMMIT_ROUND_DURATION_)
-    public
-    onlyOwner
-    {
-        COMMIT_ROUND_DURATION  = COMMIT_ROUND_DURATION_;
-    }
-    
-    
-    function updateRevealRoundDuration(uint256 REVEAL_ROUND_DURATION_)
-    public
-    onlyOwner
-    {
-        REVEAL_ROUND_DURATION  = REVEAL_ROUND_DURATION_;
-    }
-
-    function updateMaxConsensusSize(uint256 CONSENSUS_WORKER_SIZE_)
-    public
-    onlyOwner
-    {
-        CONSENSUS_WORKER_SIZE  = CONSENSUS_WORKER_SIZE_;
-    }
-
-    function updateMinConsensusSize(uint256 CONSENSUS_WORKER_SIZE_)
-    public
-    onlyOwner
-    {
-        require(CONSENSUS_WORKER_SIZE_>=1);
-        MIN_CONSENSUS_WORKER_COUNT  = CONSENSUS_WORKER_SIZE_;
-    }
-
-    function updateVoteQuoum(uint256 VOTE_QUORUM_)
-    public
-    onlyOwner
-    {
-        require(VOTE_QUORUM_>=0 && VOTE_QUORUM_<=100);
-        VOTE_QUORUM  = VOTE_QUORUM_;
-    }
-
-    function updateMaxSucceedingNoVotes(uint256 MAX_SUCCEEDING_NOVOTES_)
-    public
-    onlyOwner
-    {
-        require(MAX_SUCCEEDING_NOVOTES_>0);
-        MAX_SUCCEEDING_NOVOTES  = MAX_SUCCEEDING_NOVOTES_;
-    }
-
-    function updateNoVoteRegistrationDuration(uint256 NOVOTE_REGISTRATION_WAIT_DURATION_)
-    public
-    onlyOwner
-    {
-        require(NOVOTE_REGISTRATION_WAIT_DURATION_>0);
-        NOVOTE_REGISTRATION_WAIT_DURATION  = NOVOTE_REGISTRATION_WAIT_DURATION_;
-    }
-
-
-    // --------------- SFUEL MANAGEMENT SYSTEM ---------------
-    // ---------------
-
-
-    function deleteMapping(uint256 _BatchId)
+    function deleteCollectedSpotBatch(uint256 _BatchId)
     public
     onlyOwner
     {
@@ -503,6 +450,27 @@ contract DataFormatting is Ownable, RandomAllocator {
         delete DataBatch[_BatchId];
     }
 
+    function deleteOldData() internal{
+        uint256 BatchesToDeleteCount = BatchCheckingCursor - BatchDeletionCursor;
+        if( BatchesToDeleteCount > Parameters.get_MAX_CONTRACT_STORED_BATCHES() ){                
+            for(uint256 i=0; i< Math.min(Parameters.get_MAX_UPDATE_ITERATIONS(), BatchesToDeleteCount); i++){ // Iterate at most Max(MAX_UPDATE_ITERATIONS, BatchesToDeleteCount)
+                // First Delete Atomic Data composing the Batch, from start to end indices
+                uint256 start_batch_idx = DataBatch[BatchDeletionCursor].start_idx;
+                uint256 end_batch_idx = DataBatch[BatchDeletionCursor].start_idx + DataBatch[BatchDeletionCursor].counter;
+                for(uint256 l = start_batch_idx; l < end_batch_idx; l++){
+                    deleteData(l); // delete SpotsMapping at index l
+                }
+                // Then delete the Data Batch
+                deleteDataBatch(BatchDeletionCursor);
+                emit _DataBatchDeleted(BatchDeletionCursor);
+            }
+        }
+    }
+
+    // ----------------------------------------------------------------------------------
+    //                          Fuel Auto Top Up system
+    // ----------------------------------------------------------------------------------
+
     function updatesFuelFaucet(address _sFuel)
     public
     onlyOwner
@@ -522,12 +490,10 @@ contract DataFormatting is Ownable, RandomAllocator {
             _retrieveSFuel();
             _;
     }
-    // --------------------------------------------------------------------------------------------------------------------------------------------------------
-    // --------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    // ----------------------------------------------------------------------------------
     //                          WORKER REGISTRATION & LOBBY MANAGEMENT
-    // --------------------------------------------------------------------------------------------------------------------------------------------------------
-    // --------------------------------------------------------------------------------------------------------------------------------------------------------
-    
+    // ----------------------------------------------------------------------------------
 
     function isInAvailableWorkers(address _worker) internal view returns(bool){
         bool found = false;
@@ -550,7 +516,6 @@ contract DataFormatting is Ownable, RandomAllocator {
         }
         return found;
     }
-
 
 
 
@@ -605,19 +570,19 @@ contract DataFormatting is Ownable, RandomAllocator {
     /* Register worker (online) */
     function RegisterWorker() public topUpSFuel {
         WorkerState storage worker_state = WorkersState[msg.sender];
-        require((availableWorkers.length+busyWorkers.length) < MAX_TOTAL_WORKERS, "Maximum registered workers already");
+        require((availableWorkers.length+busyWorkers.length) < Parameters.getMaxTotalWorkers(), "Maximum registered workers already");
         require(worker_state.registered == false, "Worker is already registered");
         
         // require worker to NOT have NOT VOTED MAX_SUCCEEDING_NOVOTES times in a row. If so, he has to wait NOVOTE_REGISTRATION_WAIT_DURATION
         require(    !( // NOT
-                    worker_state.succeeding_novote_count >= MAX_SUCCEEDING_NOVOTES 
-                    && (block.timestamp - worker_state.registration_date)<NOVOTE_REGISTRATION_WAIT_DURATION
+                    worker_state.succeeding_novote_count >= Parameters.get_MAX_SUCCEEDING_NOVOTES() 
+                    && (block.timestamp - worker_state.registration_date) < Parameters.get_NOVOTE_REGISTRATION_WAIT_DURATION()
                     ),
                  "User has not voted many times in a row and needs to wait NOVOTE_REGISTRATION_WAIT_DURATION to register again" );
         
 
         //_numTokens The number of tokens to be committed towards the target FormattedData
-        uint256 _numTokens = MIN_STAKE;
+        uint256 _numTokens = Parameters.get_FORMAT_MIN_STAKE();
         
         // Master/SubWorker Stake Management
         address _senderMaster = AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
@@ -669,15 +634,25 @@ contract DataFormatting is Ownable, RandomAllocator {
             worker_state.registered = false;
             emit _WorkerUnregistered(msg.sender, block.timestamp);
         }
-
         AllTxsCounter += 1;
     }
 
-    ///////////////  ---------------------------------------------------------------------
-    ///////////////              TRIGGER NEW EPOCH: DEPEND ON SPOTTING SYSTEM
-    ///////////////  ---------------------------------------------------------------------
-
-
+    function processLogoffRequests() internal{
+        for (uint256 i = 0; i < toUnregisterWorkers.length; i++) {
+            address worker_addr_ = toUnregisterWorkers[i];
+            WorkerState storage worker_state = WorkersState[worker_addr_];
+            worker_state.registered = false;
+            worker_state.unregistration_request = false;
+            PopFromAvailableWorkers(worker_addr_);
+            PopFromBusyWorkers(worker_addr_);
+        }
+        delete toUnregisterWorkers;
+    }
+    
+    // ----------------------------------------------------------------------------------
+    //                          LINK PREVIOUS DATA SPOTTING SYSTEM AS INPUT
+    // ----------------------------------------------------------------------------------
+    
     function Ping(uint256 CheckedBatchId) public{
         if(SpottingSystem != ISpottingSystem(address(0)) && !CollectedSpotBatchs[CheckedBatchId]){           // don't re import already collected batch 
 
@@ -698,10 +673,10 @@ contract DataFormatting is Ownable, RandomAllocator {
 
                     // UPDATE STREAMING DATA BATCH STRUCTURE
                     BatchMetadata storage current_data_batch = DataBatch[LastBatchCounter];
-                    if(current_data_batch.counter < DATA_BATCH_SIZE){
+                    if(current_data_batch.counter < Parameters.get_FORMAT_DATA_BATCH_SIZE()){
                         current_data_batch.counter += 1;
                     }                            
-                    if(current_data_batch.counter >= DATA_BATCH_SIZE)
+                    if(current_data_batch.counter >= Parameters.get_FORMAT_DATA_BATCH_SIZE())
                     { // batch is complete trigger new work round, new batch
                         current_data_batch.complete = true;
                         current_data_batch.checked = false;
@@ -709,7 +684,7 @@ contract DataFormatting is Ownable, RandomAllocator {
                         DataBatch[LastBatchCounter].start_idx = DataNonce;
                     }
                 
-                    TriggerNextEpoch();
+                    TriggerUpdate();
                     DataNonce = DataNonce + 1;
                     emit _FormatSubmitted(DataNonce, SpotBatch.batchIPFSfile, msg.sender);
                        
@@ -723,49 +698,39 @@ contract DataFormatting is Ownable, RandomAllocator {
     }
 
 
+    // ----------------------------------------------------------------------------------
+    //                          UPDATE SYSTEMS
+    // ----------------------------------------------------------------------------------
 
-    function TriggerNextEpoch() public topUpSFuel {
-        bool progress = false;
+    function TriggerUpdate() public topUpSFuel {
         // Log off waiting users first
         if(toUnregisterWorkers.length > 0){
             processLogoffRequests();
+        }        
+        // Delete old data if needed
+        deleteOldData();
+        for(uint256 i=0; i< Parameters.get_MAX_UPDATE_ITERATIONS() ;i++){
+            bool progress = false;
+            // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
+            if(DataBatch[BatchCheckingCursor].allocated_to_work == true && ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
+                ValidateDataBatch(BatchCheckingCursor);            
+                BatchCheckingCursor = BatchCheckingCursor.add(1);        
+                progress = true;
+            }
+            // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
+            if( DataBatch[AllocatedBatchCursor].allocated_to_work != true  
+                && availableWorkers.length >= Parameters.get_FORMAT_MIN_CONSENSUS_WORKER_COUNT()
+                && DataBatch[AllocatedBatchCursor].complete  ){ //nothing to allocate, waiting for this to end
+                AllocateWork();
+                progress = true;
+            }
+            if(!progress){
+                // break from the loop if no more progress is made when iterating (no batch to validate, no work to allocate)
+                break;
+            }
         }
-        // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
-        if(DataBatch[BatchCheckingCursor].allocated_to_work == true && ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
-            ValidateDataBatch(BatchCheckingCursor);            
-            BatchCheckingCursor = BatchCheckingCursor.add(1);        
-            progress = true;
-        }
-        // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
-        if( DataBatch[AllocatedBatchCursor].allocated_to_work != true  
-            && availableWorkers.length >= MIN_CONSENSUS_WORKER_COUNT
-            && DataBatch[AllocatedBatchCursor].complete  ){ //nothing to allocate, waiting for this to end
-            AllocateWork();
-            progress = true;
-        }
-        // then move on with the next epoch, if not enough workers, we just stall until we get a new batch.
-        if(progress){
-            // ---------------- GLOBAL STATE UPDATE ----------------
-            CurrentWorkEpoch = CurrentWorkEpoch.add(1);   
-        }
-        emit _NewEpoch(CurrentWorkEpoch);
     }
 
-
-    /////////////
-    function processLogoffRequests() internal{
-        for (uint256 i = 0; i < toUnregisterWorkers.length; i++) {
-            address worker_addr_ = toUnregisterWorkers[i];
-            WorkerState storage worker_state = WorkersState[worker_addr_];
-            worker_state.registered = false;
-            worker_state.unregistration_request = false;
-            PopFromAvailableWorkers(worker_addr_);
-            PopFromBusyWorkers(worker_addr_);
-        }
-        delete toUnregisterWorkers;
-    }
-
-    /////////////
     function AreStringsEqual(string memory _a, string memory _b) public pure returns(bool){
         if (keccak256(abi.encodePacked(_a)) == keccak256(abi.encodePacked(_b))) {
             return true;
@@ -775,7 +740,6 @@ contract DataFormatting is Ownable, RandomAllocator {
         }
     }
     event BytesFailure(bytes bytesFailure);
-
 
     /**
     @notice Trigger the validation of a FormattedData hash; if the FormattedData has ended. If the requirements are APPROVED, 
@@ -801,7 +765,7 @@ contract DataFormatting is Ownable, RandomAllocator {
 
         // -------------------------------------------------------------
         // GET THE MAJORITY NEW HASH IPFS FILE
-        uint256 majority_min_count = Math.max(allocated_workers_.length * VOTE_QUORUM / 100, 1);
+        uint256 majority_min_count = Math.max(allocated_workers_.length * Parameters.getVoteQuorum() / 100, 1);
         
         string memory majorityNewFile = proposedNewFiles[0]; //take first file by default, just in case
         for(uint256 k = 0; k < proposedNewFiles.length; k++){
@@ -861,8 +825,8 @@ contract DataFormatting is Ownable, RandomAllocator {
                 string memory worker_proposed_hash = UserNewFiles[_DataBatchId][worker_addr_];                
                 if( AreStringsEqual(worker_proposed_hash, majorityNewFile) ){ 
                     address worker_master_addr_ = AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
-                    require(RepManager.mintReputationForWork(MIN_REP_Data, worker_master_addr_, ""), "could not reward REP in TriggerCheckSpot, 1.a");
-                    require(RewardManager.ProxyAddReward(MIN_REWARD_Data, worker_master_addr_), "could not reward token in TriggerCheckSpot, 1.b");                
+                    require(RepManager.mintReputationForWork(Parameters.get_FORMAT_MIN_REP_Data(), worker_master_addr_, ""), "could not reward REP in ValidateDataBatch, 1.a");
+                    require(RewardManager.ProxyAddReward(Parameters.get_FORMAT_MIN_REWARD_Data(), worker_master_addr_), "could not reward token in ValidateDataBatch, 1.b");       
                     worker_state.majority_counter += 1;        
                 }
                 else{                    
@@ -878,13 +842,13 @@ contract DataFormatting is Ownable, RandomAllocator {
             }
             // if worker has not voted, he is disconnected "by force" OR if asked to be unregistered
             // this worker will have to register again
-            else if( worker_state.unregistration_request || has_worker_voted_ == false ){                      
-                if(worker_state.registered){ // only if the worker is still registered
+            else if( worker_state.unregistration_request || (has_worker_voted_ == false)){                      
+                WorkersState[worker_addr_].succeeding_novote_count += 1;// worker has not voted, increase the counter
+                if(WorkersState[worker_addr_].succeeding_novote_count == Parameters.get_MAX_SUCCEEDING_NOVOTES()){ // only if the worker is still registered
                     worker_state.registered = false;
                     PopFromAvailableWorkers(worker_addr_);
                     PopFromBusyWorkers(worker_addr_);
                 }
-                WorkersState[worker_addr_].succeeding_novote_count += 1; // worker has not voted, increase the counter
             }
             // General Worker State Update
             worker_state.allocated_work_batch == 0;
@@ -931,15 +895,15 @@ contract DataFormatting is Ownable, RandomAllocator {
     function AllocateWork() public  {
         require(DataBatch[AllocatedBatchCursor].complete, "Can't allocate work, the current batch is not complete");
         require(DataBatch[AllocatedBatchCursor].allocated_to_work == false, "Can't allocate work, the current batch is already allocated");
-        uint256 selected_k = Math.max( Math.min(availableWorkers.length, CONSENSUS_WORKER_SIZE), MIN_CONSENSUS_WORKER_COUNT); // pick at most CONSENSUS_WORKER_SIZE workers, minimum 1.
+        uint256 selected_k = Math.max( Math.min(availableWorkers.length, Parameters.get_FORMAT_MAX_CONSENSUS_WORKER_COUNT()), Parameters.get_FORMAT_MIN_CONSENSUS_WORKER_COUNT()); // pick at most CONSENSUS_WORKER_SIZE workers, minimum 1.
         uint256 n = availableWorkers.length;
 
         ///////////////////////////// BATCH UPDATE STATE /////////////////////////////
         DataBatch[AllocatedBatchCursor].unrevealed_workers = selected_k;
         DataBatch[AllocatedBatchCursor].uncommited_workers = selected_k;
         
-        uint256 _commitEndDate = block.timestamp.add(COMMIT_ROUND_DURATION);
-        uint256 _revealEndDate = _commitEndDate.add(REVEAL_ROUND_DURATION);
+            uint256 _commitEndDate = block.timestamp.add(Parameters.get_FORMAT_COMMIT_ROUND_DURATION());
+            uint256 _revealEndDate = _commitEndDate.add(Parameters.get_FORMAT_REVEAL_ROUND_DURATION());
         DataBatch[AllocatedBatchCursor].commitEndDate = _commitEndDate;
         DataBatch[AllocatedBatchCursor].revealEndDate = _revealEndDate;
         DataBatch[AllocatedBatchCursor].allocated_to_work = true;
@@ -1008,8 +972,8 @@ contract DataFormatting is Ownable, RandomAllocator {
         require(isWorkerAllocatedToBatch(_DataBatchId, msg.sender), "User needs to be allocated to this batch to commit on it");
 
         //_numTokens The number of tokens to be committed towards the target FormattedData
-        uint256 _numTokens = MIN_STAKE;
-        
+        uint256 _numTokens = Parameters.get_FORMAT_MIN_STAKE();
+
         // Master/SubWorker Stake Management
         address _senderMaster = AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
         if (FormatStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
@@ -1198,7 +1162,7 @@ contract DataFormatting is Ownable, RandomAllocator {
         BatchMetadata memory batch_ = DataBatch[_DataBatchId];
         uint256 batch_size = batch_.counter;
 
-        string[] memory ipfs_hash_list = new string[](DATA_BATCH_SIZE);
+        string[] memory ipfs_hash_list = new string[](Parameters.get_FORMAT_DATA_BATCH_SIZE());
 
         for(uint256 i=0; i < batch_size; i++){
             uint256 k = batch_.start_idx + i;
@@ -1278,7 +1242,7 @@ contract DataFormatting is Ownable, RandomAllocator {
         // require(DataEnded(_DataBatchId), "Data Batch Checking commitee must have ended");
 
         BatchMetadata memory batch_ = DataBatch[_DataBatchId];
-        return (100 * batch_.votesFor) > (VOTE_QUORUM * (batch_.votesFor + batch_.votesAgainst));
+        return (100 * batch_.votesFor) > (Parameters.getVoteQuorum() * (batch_.votesFor + batch_.votesAgainst));
     }
 
     /**
@@ -1335,13 +1299,7 @@ contract DataFormatting is Ownable, RandomAllocator {
         return  AllTxsCounter;
     }
     
-    /**
-    @notice getLastBachDataId
-    @return WorkEpoch of the last Dataed a user started
-    */
-    function getCurrentWorkEpoch() public view returns (uint256 WorkEpoch) {
-        return  CurrentWorkEpoch;
-    }
+
     /**
     @notice Determines DataCommitEndDate
     @return commitEndDate indication of whether Dataing period is over
@@ -1510,40 +1468,40 @@ contract DataFormatting is Ownable, RandomAllocator {
         return getNumTokens(_voter, getLastNode(_voter));
     }
 
-    // /*
-    // @dev Takes the last node in the user's DLL and iterates backwards through the list searching
-    // for a node with a value less than or equal to the provided _numTokens value. When such a node
-    // is found, if the provided _DataBatchId matches the found nodeID, this operation is an in-place
-    // update. In that case, return the previous node of the node being updated. Otherwise return the
-    // first node that was found with a value less than or equal to the provided _numTokens.
-    // @param _voter The voter whose DLL will be searched
-    // @param _numTokens The value for the numTokens attribute in the node to be inserted
-    // @return the node which the propoded node should be inserted after
-    // */
-    // function getInsertPointForNumTokens(address _voter, uint256 _numTokens, uint256 _DataBatchId) public view  returns (uint256 prevNode) {
-    //   // Get the last node in the list and the number of tokens in that node
-    //   uint256 nodeID = getLastNode(_voter);
-    //   uint256 tokensInNode = getNumTokens(_voter, nodeID);
+    /*
+    @dev Takes the last node in the user's DLL and iterates backwards through the list searching
+    for a node with a value less than or equal to the provided _numTokens value. When such a node
+    is found, if the provided _DataBatchId matches the found nodeID, this operation is an in-place
+    update. In that case, return the previous node of the node being updated. Otherwise return the
+    first node that was found with a value less than or equal to the provided _numTokens.
+    @param _voter The voter whose DLL will be searched
+    @param _numTokens The value for the numTokens attribute in the node to be inserted
+    @return the node which the propoded node should be inserted after
+    */
+    function getInsertPointForNumTokens(address _voter, uint256 _numTokens, uint256 _DataBatchId) public view  returns (uint256 prevNode) {
+      // Get the last node in the list and the number of tokens in that node
+      uint256 nodeID = getLastNode(_voter);
+      uint256 tokensInNode = getNumTokens(_voter, nodeID);
 
-    //   // Iterate backwards through the list until reaching the root node
-    //   while(nodeID != 0) {
-    //     // Get the number of tokens in the current node
-    //     tokensInNode = getNumTokens(_voter, nodeID);
-    //     if(tokensInNode <= _numTokens) { // We found the insert point!
-    //       if(nodeID == _DataBatchId) {
-    //         // This is an in-place update. Return the prev node of the node being updated
-    //         nodeID = dllMap[_voter].getPrev(nodeID);
-    //       }
-    //       // Return the insert point
-    //       return nodeID; 
-    //     }
-    //     // We did not find the insert point. Continue iterating backwards through the list
-    //     nodeID = dllMap[_voter].getPrev(nodeID);
-    //   }
+      // Iterate backwards through the list until reaching the root node
+      while(nodeID != 0) {
+        // Get the number of tokens in the current node
+        tokensInNode = getNumTokens(_voter, nodeID);
+        if(tokensInNode <= _numTokens) { // We found the insert point!
+          if(nodeID == _DataBatchId) {
+            // This is an in-place update. Return the prev node of the node being updated
+            nodeID = dllMap[_voter].getPrev(nodeID);
+          }
+          // Return the insert point
+          return nodeID; 
+        }
+        // We did not find the insert point. Continue iterating backwards through the list
+        nodeID = dllMap[_voter].getPrev(nodeID);
+      }
 
-    //   // The list is empty, or a smaller value than anything else in the list is being inserted
-    //   return nodeID;
-    // }
+      // The list is empty, or a smaller value than anything else in the list is being inserted
+      return nodeID;
+    }
 
     // ----------------
     // GENERAL HELPERS:

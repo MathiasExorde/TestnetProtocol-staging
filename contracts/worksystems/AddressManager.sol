@@ -34,7 +34,7 @@ contract AddressManager is Ownable{
     mapping (address =>  address) public SubToMasterMap;  // worker -> master, only 1 master per worker address, 1->1 relation
     // ALWAYS [MASTER, WORKER] order in the arguments of all functions
     
-    uint256 MAX_MASTER_LOOKUP  = 10;
+    uint256 MAX_MASTER_LOOKUP  = 5;
 
     IReputation public Reputation;
     IRepManager public RepManager;
@@ -215,9 +215,8 @@ contract AddressManager is Ownable{
     }
 
 
-    //// --------------------------- 
-    //// --------------------------- WORKER FUNCTIONS
-    //// ---------------------------
+    //// -----------------------------------------------------------
+    //// -------------------- WORKER FUNCTIONS ---------------------
 
     function FetchHighestMaster(address _worker) public view returns (address){
         require(_worker != address(0), "FetchHighestMaster: input _worker needs to be non null address");
@@ -235,7 +234,9 @@ contract AddressManager is Ownable{
 
     function TransferRepToMaster(address _worker)
         internal
-    {   
+    {           
+        require(address(Reputation) != address(0), "Reputation needs to be setup");
+        require(address(RepManager) != address(0), "RepManager needs to be setup");
         require(SubToMasterMap[_worker] != address(0), "TransferRepToMaster: input _worker needs to have a non-null master"); // needs non null address to transfer Rep.
         uint256 _worker_rep = Reputation.balanceOf(_worker);
         address _highest_master = FetchHighestMaster(_worker);
@@ -251,6 +252,7 @@ contract AddressManager is Ownable{
     function TransferRewardsToMaster(address _worker)
         internal
     {   
+        require(address(RewardManager) != address(0), "RewardManager needs to be setup");
         require(SubToMasterMap[_worker] != address(0), "TransferRepToMaster: input _worker needs to have a non-null master"); // needs non null address to transfer Rep.
         uint256 _worker_rewards = RewardManager.RewardsBalanceOf(_worker);
         address _highest_master = FetchHighestMaster(_worker);
