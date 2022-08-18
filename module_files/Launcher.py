@@ -198,12 +198,12 @@ for value in ["_moduleHashContracts","_moduleHashTransaction","_moduleHashSpotti
     
 
 
-# for value in ["https://ipfs.io/ipfs/bafybeigowmsxmjeh4fjrlrcswf5tlzmuryfnuroit7tztmwihn2gqkuwkq/ContractManager.py",                 #Contracts
+# for value in ["https://ipfs.io/ipfs/bafybeibk6yntr4jgfol4p64zop4zenggdrnvn4uxsinisecwj6loa4w35e/ContractManager.py",                 #Contracts
 #               "https://ipfs.io/ipfs/bafybeifutccfdkeikkfz52z3hcrhf7nzk5frjavcgwazyvfuz54e32o5ti/TransactionManager.py",              #Transactions
 #               "https://ipfs.io/ipfs/bafybeigwxqrl4yk4etbaiipkhtoeckbugliegxqru3upz7zxvonk6rcfri/Scraping.py",                        #Spotting
 #               "https://ipfs.io/ipfs/bafybeigfjih2o24cotjsrxo3wmhqn5rhsy66jfoo6fsfqeswhlccua4uku/SpottingValidation.py",              #SpotChecking
 #               "https://ipfs.io/ipfs/bafybeihkneksx3ohzmkmkyfqf7anxhjput6dxqt5tdmk63tw5qjg4ye3xu/Formatting.py",                      #Formatting
-#               "https://ipfs.io/ipfs/bafybeih7z4xl3jddxu2ikgv74mqj5t7jc2wcrvwlijxye7cr2uphnlw3ce/ExordeApp.py"]:                      #App
+#               "https://ipfs.io/ipfs/bafybeicpyrw3nxfpfocggbh5d7wxmufxhyy554hywcnm56xnkp7wjh4aq4/ExordeApp.py"]:                      #App
 #     print(value)
     
 #     #code = requests.get(value).text
@@ -211,15 +211,7 @@ for value in ["_moduleHashContracts","_moduleHashTransaction","_moduleHashSpotti
 #     #print(code)
 #     exec(code)
 
-try:
-
-    x = threading.Thread(target=run)
-    x.start()
-    
-except Exception as e:
-    
-    tk.messagebox("Initialization error", "Something went wrong, please try again.")
-    print(e)
+run()
 
 # if(__name__ == "__main__"):
 
