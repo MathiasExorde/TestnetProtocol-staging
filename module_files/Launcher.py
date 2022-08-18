@@ -88,70 +88,72 @@ def ls_split(a, n):
 from os import walk, path, sep
 from requests import Session, Request
 def pinata_upload(file: str, mode: str = "file"):
-    
-    # directory is the abs path of dir
-    #ipfs_url = "https://api.pinata.cloud/pinning/pinFileToIPFS"
-    ipfs_url = 'https://api.web3.storage/upload'
-    # headers = {
-    #     #"Content-Type": "application/json",
-    #     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.146 Safari/537.36',
-    #     'pinata_api_key': "19d2b24b75ad7253aebf", #"0a3c682cdac6f59c497f",
-    #     'pinata_secret_api_key': "f69150422667f79ce5a7fb0997bfdbb3750894cd1734275f77d867647e4f3df4" #"d17b895242d8913b5c5a8dc9933a11223fc5f81696705c78bce150083ad2341d"
-    #     #'Authorization': "Bearer MjRDODM2ODJFMzc1OERBNjNERDk6QjE0OUVRR2QxV3dHTHB1V0hnUEdUNXdRNU9xZ1hQcTNBT1F0VGVCcjpleG9yZGUtc3BvdHMtMQ=="
-    # }
-    headers = {
-        'Accept':' */*',
-        "Content-Type": "application/json",
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.146 Safari/537.36',
-        #'pinata_api_key': "19d2b24b75ad7253aebf", #"0a3c682cdac6f59c497f",
-        #'pinata_secret_api_key': "f69150422667f79ce5a7fb0997bfdbb3750894cd1734275f77d867647e4f3df4" #"d17b895242d8913b5c5a8dc9933a11223fc5f81696705c78bce150083ad2341d"
-        'Authorization': "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaWQ6ZXRocjoweDQwODM0NzVENjRDQ2JBZWViRUNCYkU5MTQxZTRFQkQyQTNERjhBMUMiLCJpc3MiOiJ3ZWIzLXN0b3JhZ2UiLCJpYXQiOjE2NTk2MTkxMTg4MjUsIm5hbWUiOiJleG9yZGUtdGVzdG5ldC1zcG90In0.AkKUkgbtejixeWcLvrVypY63yg8NEiagqaKzBZEppJk"
-    }
-    if(mode == "file"):
-        # files = []
-        # files = [("file", open(file, "rb"))]
-        request = Request(
-            'POST',
-            ipfs_url,
-            headers=headers,
-            data=file
-        ).prepare()
-    else:
-        if(file.endswith(".pkl") == False):
-            headers['Content-type'] = 'application/json'
-            headers['Accept'] = 'text/plain'
-            request = Request(
-                'POST',
-                #"https://api.pinata.cloud/pinning/pinJSONToIPFS",
-                'https://api.web3.storage/upload',
-                headers=headers,
-                data=file
-            ).prepare()
-        else:
+    try:
+        # directory is the abs path of dir
+        #ipfs_url = "https://api.pinata.cloud/pinning/pinFileToIPFS"
+        ipfs_url = 'https://api.web3.storage/upload'
+        # headers = {
+        #     #"Content-Type": "application/json",
+        #     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.146 Safari/537.36',
+        #     'pinata_api_key': "19d2b24b75ad7253aebf", #"0a3c682cdac6f59c497f",
+        #     'pinata_secret_api_key': "f69150422667f79ce5a7fb0997bfdbb3750894cd1734275f77d867647e4f3df4" #"d17b895242d8913b5c5a8dc9933a11223fc5f81696705c78bce150083ad2341d"
+        #     #'Authorization': "Bearer MjRDODM2ODJFMzc1OERBNjNERDk6QjE0OUVRR2QxV3dHTHB1V0hnUEdUNXdRNU9xZ1hQcTNBT1F0VGVCcjpleG9yZGUtc3BvdHMtMQ=="
+        # }
+        headers = {
+            'Accept':' */*',
+            "Content-Type": "application/json",
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.146 Safari/537.36',
+            #'pinata_api_key': "19d2b24b75ad7253aebf", #"0a3c682cdac6f59c497f",
+            #'pinata_secret_api_key': "f69150422667f79ce5a7fb0997bfdbb3750894cd1734275f77d867647e4f3df4" #"d17b895242d8913b5c5a8dc9933a11223fc5f81696705c78bce150083ad2341d"
+            'Authorization': "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkaWQ6ZXRocjoweDQwODM0NzVENjRDQ2JBZWViRUNCYkU5MTQxZTRFQkQyQTNERjhBMUMiLCJpc3MiOiJ3ZWIzLXN0b3JhZ2UiLCJpYXQiOjE2NTk2MTkxMTg4MjUsIm5hbWUiOiJleG9yZGUtdGVzdG5ldC1zcG90In0.AkKUkgbtejixeWcLvrVypY63yg8NEiagqaKzBZEppJk"
+        }
+        if(mode == "file"):
+            # files = []
+            # files = [("file", open(file, "rb"))]
             request = Request(
                 'POST',
                 ipfs_url,
                 headers=headers,
                 data=file
             ).prepare()
-    response = Session().send(request)
-    
-    #print()
-    if(str(response.status_code).startswith("2")):
-        result = dict()
-        result[0] = response.request.url
-        result[1] = response.request.headers
-        #result[2] = response.request.body
-        result[2] = response.json()
-        # print()
-        # print("File pinned at : ", result[2])
-        #print(response.text)
+        else:
+            if(file.endswith(".pkl") == False):
+                headers['Content-type'] = 'application/json'
+                headers['Accept'] = 'text/plain'
+                request = Request(
+                    'POST',
+                    #"https://api.pinata.cloud/pinning/pinJSONToIPFS",
+                    'https://api.web3.storage/upload',
+                    headers=headers,
+                    data=file
+                ).prepare()
+            else:
+                request = Request(
+                    'POST',
+                    ipfs_url,
+                    headers=headers,
+                    data=file
+                ).prepare()
+        response = Session().send(request)
         
-        
-        return result
-    else:
-        print()
-        print(response.__dict__)
+        #print()
+        if(str(response.status_code).startswith("2")):
+            result = dict()
+            result[0] = response.request.url
+            result[1] = response.request.headers
+            #result[2] = response.request.body
+            result[2] = response.json()
+            # print()
+            # print("File pinned at : ", result[2])
+            #print(response.text)
+            
+            
+            return result
+        else:
+            print()
+            print(response.__dict__)
+    except Exception as e:
+        print(e)
         
 def pinata_unpin(hashKey: str):
     
@@ -195,11 +197,11 @@ for value in ["_moduleHashContracts","_moduleHashTransaction","_moduleHashSpotti
     
 
 
-# for value in ["https://ipfs.io/ipfs/bafybeif5v7npaz5w5btjzhx6spr4o7ezvrorhh6lcc5ifvwafi4qbava2e/ContractManager.py",                 #Contracts
+# for value in ["https://ipfs.io/ipfs/bafybeidelohxapyx4iyko5gdvjwqek7uogqbpcmwlz3xv7mytkazs6a7s4/ContractManager.py",                 #Contracts
 #               "https://ipfs.io/ipfs/bafybeifutccfdkeikkfz52z3hcrhf7nzk5frjavcgwazyvfuz54e32o5ti/TransactionManager.py",              #Transactions
 #               "https://ipfs.io/ipfs/bafybeigwxqrl4yk4etbaiipkhtoeckbugliegxqru3upz7zxvonk6rcfri/Scraping.py",                        #Spotting
-#               "https://ipfs.io/ipfs/bafybeicebrbfbeiiachykarwopthdyae7sffd55pfxkwfhadxincw5cut4/SpottingValidation.py",              #SpotChecking
-#               "https://ipfs.io/ipfs/bafybeifxn3ikpyr3kaklgh26fu2qsb256dxfjg2z2rpezrx4ojrpgjivsm/Formatting.py",                      #Formatting
+#               "https://ipfs.io/ipfs/bafybeigfjih2o24cotjsrxo3wmhqn5rhsy66jfoo6fsfqeswhlccua4uku/SpottingValidation.py",              #SpotChecking
+#               "https://ipfs.io/ipfs/bafybeihkneksx3ohzmkmkyfqf7anxhjput6dxqt5tdmk63tw5qjg4ye3xu/Formatting.py",                      #Formatting
 #               "https://ipfs.io/ipfs/bafybeidyddmrvqcduow5likint7ozar6lunymmoedni76ndemaccnpamoe/ExordeApp.py"]:                      #App
 #     print(value)
     
@@ -208,15 +210,24 @@ for value in ["_moduleHashContracts","_moduleHashTransaction","_moduleHashSpotti
 #     #print(code)
 #     exec(code)
 
+try:
 
-if(__name__ == "__main__"):
+    x = threading.Thread(target=run)
+    x.start()
+    
+except Exception as e:
+    
+    tk.messagebox("Initialization error", "Something went wrong, please try again.")
+    print(e)
 
-    try:
+# if(__name__ == "__main__"):
 
-        x = threading.Thread(target=run)
-        x.start()
+#     try:
+
+#         x = threading.Thread(target=run)
+#         x.start()
         
-    except Exception as e:
+#     except Exception as e:
         
-        tk.messagebox("Initialization error", "Something went wrong, please try again.")
-        print(e)
+#         tk.messagebox("Initialization error", "Something went wrong, please try again.")
+#         print(e)
