@@ -41,22 +41,17 @@
             },
             {
               "internalType": "uint256",
+              "name": "end_idx",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
               "name": "counter",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
-              "name": "uncommited_workers",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
               "name": "unrevealed_workers",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint256",
-              "name": "item_count",
               "type": "uint256"
             },
             {
@@ -103,6 +98,16 @@
               "internalType": "enum IFormattingSystem.DataStatus",
               "name": "status",
               "type": "uint8"
+            },
+            {
+              "internalType": "string[]",
+              "name": "flags",
+              "type": "string[]"
+            },
+            {
+              "internalType": "uint256[]",
+              "name": "flags_id",
+              "type": "uint256[]"
             }
           ],
           "internalType": "struct IFormattingSystem.BatchMetadata",
