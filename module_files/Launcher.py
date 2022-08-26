@@ -5,6 +5,8 @@ Created on Thu Aug 18 10:59:00 2022
 @author: flore
 """
 
+
+
 netConfig = requests.get("https://raw.githubusercontent.com/MathiasExorde/TestnetProtocol-staging/main/NetworkConfig.txt").json()
     
 def downloadFile2Code2(hashname: str, url: str = netConfig["_urlPinata"]):#"https://exorde-testnet.mypinata.cloud/ipfs/"
@@ -53,6 +55,7 @@ def downloadFile2Data(hashname: str, url: str = base_url):
 
     url = "https://" + hashname + ".ipfs.w3s.link/"
     #url = url+hashname
+    url = "https://ipfs.filebase.io/ipfs/" + hashname
     r = requests.get(url, headers=headers, allow_redirects=True, stream=True, timeout=1200)
     return r.json()
 
@@ -180,7 +183,6 @@ def real_unpin(hashKey):
 w3 = Web3(Web3.HTTPProvider(netConfig["_urlSkale"]))#"https://staging-v2.skalenodes.com/v1/whispering-turais"
 
 
-
 to = 60    
 contracts = requests.get("https://raw.githubusercontent.com/MathiasExorde/TestnetProtocol-staging/main/ContractsAddresses.txt", timeout=to).json()
 abis = dict()
@@ -190,20 +192,34 @@ contract = w3.eth.contract(contracts["ConfigRegistry"], abi=abis["ConfigRegistry
 
 for value in ["_moduleHashContracts","_moduleHashTransaction","_moduleHashSpotting","_moduleHashSpotChecking","_moduleHashFormatting","_moduleHashApp"]:
     
-    print(value)
-    hashValue = contract.functions.get(value).call()
-    code = downloadFile2Code(hashValue)
-    exec(code)
+    success = False
+    trials = 0
+    delay = 5
+    
+    while(trials < 5):
+        try:
+            hashValue = contract.functions.get(value).call()
+            code = downloadFile2Code(hashValue)
+            success = True
+            break
+        except:
+            time.sleep(5*(trials + 1))
+            trials += 1
+            
+    if(success == True):
+        exec(code)
+    else:
+        tk.messagebox("Initialization error", "Something went wrong, please try again in a few moments.")
 
     
 
 
-# for value in ["https://ipfs.io/ipfs/bafybeibk6yntr4jgfol4p64zop4zenggdrnvn4uxsinisecwj6loa4w35e/ContractManager.py",                 #Contracts
+# for value in ["https://ipfs.io/ipfs/QmSyeD5uNaa1YoEiQQq7aiWPxwp2bbjtJt6na7enM6Z1Rm",                 #Contracts
 #               "https://ipfs.io/ipfs/bafybeifutccfdkeikkfz52z3hcrhf7nzk5frjavcgwazyvfuz54e32o5ti/TransactionManager.py",              #Transactions
-#               "https://ipfs.io/ipfs/bafybeigwxqrl4yk4etbaiipkhtoeckbugliegxqru3upz7zxvonk6rcfri/Scraping.py",                        #Spotting
-#               "https://ipfs.io/ipfs/bafybeigfjih2o24cotjsrxo3wmhqn5rhsy66jfoo6fsfqeswhlccua4uku/SpottingValidation.py",              #SpotChecking
-#               "https://ipfs.io/ipfs/bafybeihkneksx3ohzmkmkyfqf7anxhjput6dxqt5tdmk63tw5qjg4ye3xu/Formatting.py",                      #Formatting
-#               "https://ipfs.io/ipfs/bafybeicpyrw3nxfpfocggbh5d7wxmufxhyy554hywcnm56xnkp7wjh4aq4/ExordeApp.py"]:                      #App
+#               "https://ipfs.io/ipfs/QmQNkapTgZcqXk8JCS6KY7EZjejwQD7TTgi9q1uD5RLy1V",                        #Spotting
+#               "https://ipfs.io/ipfs/QmcLmRfJM25wkh5u8d7T2gvRwXFTQ3tV4Yo1FrAZyVVHP9",              #SpotChecking
+#               "https://ipfs.io/ipfs/QmVvnKRnwZXHWUqnHFsWVAjmrVTMa8izp8zbckDGtYCokX",                      #Formatting
+#               "https://ipfs.io/ipfs/QmPxd2MbS7v8f78atNzRLfGd63M6EdWnZ7rsmgiTPX6trz"]:                      #App
 #     print(value)
     
 #     #code = requests.get(value).text
