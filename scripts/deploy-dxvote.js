@@ -1,6 +1,14 @@
 /* eslint-disable no-case-declarations */
 require("@nomiclabs/hardhat-web3");
+require('hardhat-contract-sizer');
 
+// contractSizer: {
+//   alphaSort: true,
+//   disambiguatePaths: false,
+//   runOnCompile: true,
+//   strict: true,
+//   only: [':ERC20$'],
+// };
 
 const contentHash = require("content-hash");
 const IPFS = require("ipfs-core");
@@ -50,10 +58,15 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     // --------------------------------
     const AttributeStore = artifacts.require('AttributeStore.sol');
     const AttributeStore2 = artifacts.require('AttributeStore2.sol');
+    const AttributeStore3 = artifacts.require('AttributeStore3.sol');
+    const AttributeStore4 = artifacts.require('AttributeStore4.sol');
     const DLL = artifacts.require('DLL.sol');
     const DLL2 = artifacts.require('DLL2.sol');
+    const DLL3 = artifacts.require('DLL3.sol');
+    const DLL4 = artifacts.require('DLL4.sol');
     const DataSpotting = await hre.artifacts.require("DataSpotting");
-    const DataFormatting = await hre.artifacts.require("DataFormatting");
+    const DataCompliance = await hre.artifacts.require("DataCompliance");
+    const DataIndexing = await hre.artifacts.require("DataIndexing");
     const DataArchive = await hre.artifacts.require("DataArchive");
     // ---------------------------------
     const DXDVotingMachine = await hre.artifacts.require("DXDVotingMachine");
@@ -77,10 +90,12 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     // Get ETH accounts to be used
     const accounts = await web3.eth.getAccounts();
     console.log("Current Network = ",networkName)
-    if(networkName == 'schain'){
+    if(networkName.startsWith('schain')){
+      console.log("Using schain, with specific deployer account")
       deployer_account = accounts[0];
     }
     else{
+      console.log("NOT Using schain")
       deployer_account = accounts[8];
     }
     console.log("Deployer account = ",deployer_account.toString())
@@ -124,8 +139,17 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     let ControllerAddress;
     let ParametersAddress;
 
-
-    let IMPORT_DEPLOYED_CORE = true;
+  // -------------------------------
+    let IMPORT_DEPLOYED_BASE = false;
+    let IMPORT_DEPLOYED_CORE = false;
+    let IMPORT_DEPLOYED_WS = false;
+  // -------------------------------
+  // WORK SYSTEM DEPLOYED ADDRESSES (if not deployed_ws):
+    let _dataspot_addr = ""
+    let _dataformat_addr = ""
+    let _dataindex_addr = ""
+    let _dataarch_addr = ""
+  
     if(IMPORT_DEPLOYED_CORE){        
       console.log("------------------- Deploying with predeployed contracts");
     }
@@ -134,39 +158,62 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     }
 
 
-    if(networkName == 'schain'){
-      // DAO
-      ReputationAddress = "0x15B6f5EC3F1027326c3a2805218Bd1eD44248997";
-      AvatarAddress = "0x2d9b914bA532b60f1920580111200460c65Cb6f3";
-      ControllerAddress = "0x156ed1ad9200a3196caA3b53F763174265f1312a";
+  // rappen network
+    // if(networkName.startsWith('schain')){
+    //   // EXDT Token
+    //   EXDTTokenAddress = "0x2BC6eD43ea8CAE758D66924b1aFE389FE4da80fF";
+    //   // DAO
+    //   ReputationAddress = "0x15B6f5EC3F1027326c3a2805218Bd1eD44248997";
+    //   AvatarAddress = "0x2d9b914bA532b60f1920580111200460c65Cb6f3";
+    //   ControllerAddress = "0x156ed1ad9200a3196caA3b53F763174265f1312a";
+    //   // DAO CORE PERMISSIONING
+    //   MasterWalletAddress = "0xa78091792B52Ed86B80BE7c979F24F10E51AD363";
+    //   PermissionRegistryAddress = "0x5Af79217EFe46598B0987C940C9A61D0064Ad72f";            
+    //   // WORKSYSTEMS PARAMETERS
+    //   ParametersAddress = "0x0f91D265b7B1390bA58cf89804A32FBe9f97C002";
+    //   // CONFIG REGISTRY
+    //   ConfigRegistryAddress = "0xCe14234596c50F344a7c12F0088cEA9aE4B27479";
+    //   // Address Manager
+    //   // AddressManagerAddress = "0x124D104c12f01c76bbcc9f6f35a14512fBF1088A"; // v1
+    //   // AddressManagerAddress = "0x8D72f1428770dFEdcc8cc0Da45Cf79B17a073F83"; // v1.2
+    //   AddressManagerAddress = "0x851be81FBe83B8965404176f96aDFec64Ba51937"; // v1.3
+    //   // End of pipeline: Archiving
+    //   DataArchiveAddress = "0x89b90093078cEc1aD2B4d9Dd25968b9e64b53f61";
+    //   // STake & Rewards
+    //   StakingManagerAddress = "0x3078Ac027CD298850EE3e1F1676D897d3A2095Cb";
+    //   // RewardsManagerAddress = "0x87433785Fd0423132429DD9E064FFE747F9c6283"; //v1
+    //   RewardsManagerAddress = "0x08802929866117630d928bBE22359EEb7173AA3a"; //v2
+    //   // sFuel Auto top up system
+    //   SFuelContractsAddress = "0xd4E6CF86782A5C1169Dc852776fD06aF7d7F7cf8";
+      
+    // }
 
+  // roasted network
+    if(networkName.startsWith('schain')){
+      // EXDT Token
+      EXDTTokenAddress = "0x40a9f884e019CDED3ea61Ba0419e0f5E0bc9595a";
+      // DAO
+      ReputationAddress = "0x7E7E29ad43EE1E43e1826360DA730d8Fc5C8f3Be";
+      AvatarAddress = "0xd1aDF5255D5fd8CA74F6A6361683E947FFe8F029";
+      ControllerAddress = "0x156ed1ad9200a3196caA3b53F763174265f1312a";
       // DAO CORE PERMISSIONING
       MasterWalletAddress = "0xa78091792B52Ed86B80BE7c979F24F10E51AD363";
-      PermissionRegistryAddress = "0x5Af79217EFe46598B0987C940C9A61D0064Ad72f";
-            
+      PermissionRegistryAddress = "0x5eAeffeb90d57e671122847340562788e07dddA8";            
       // WORKSYSTEMS PARAMETERS
-      ParametersAddress = "0x0f91D265b7B1390bA58cf89804A32FBe9f97C002";
-
+      ParametersAddress = "0xeac06624D4DAB5BB62856CCEf33567b788607e6A";
       // CONFIG REGISTRY
-      ConfigRegistryAddress = "0xCe14234596c50F344a7c12F0088cEA9aE4B27479";
-
+      ConfigRegistryAddress = "0x70945DAAE86786300FD67F769fcF75F5A8D06EcE";
       // Address Manager
-      // AddressManagerAddress = "0x124D104c12f01c76bbcc9f6f35a14512fBF1088A"; // v1
-      AddressManagerAddress = "0x8D72f1428770dFEdcc8cc0Da45Cf79B17a073F83"; // v2
-
+      AddressManagerAddress = "0xD0631530Dc688925618dBBD739256537a1cf04e1";
       // End of pipeline: Archiving
-      DataArchiveAddress = "0xA60Fd6b88F3252d345B205BeB1070bBFfaB8dFc1";
-
-      // EXDT Token
-      EXDTTokenAddress = "0x2BC6eD43ea8CAE758D66924b1aFE389FE4da80fF";
-
+      DataArchiveAddress = "0x89b90093078cEc1aD2B4d9Dd25968b9e64b53f61";
       // STake & Rewards
-      StakingManagerAddress = "0x3078Ac027CD298850EE3e1F1676D897d3A2095Cb";
-      RewardsManagerAddress = "0x87433785Fd0423132429DD9E064FFE747F9c6283";
-
-      // sFuel Auto top up system
-      SFuelContractsAddress = "0xd4E6CF86782A5C1169Dc852776fD06aF7d7F7cf8";
+      StakingManagerAddress = "0xbfAACccE5AedC0DC32bE45aC4223A59D1eb7f8A7";
+      RewardsManagerAddress = "0x8D456f337f1C4af6D1D0E343bD21D9e66F19b64C";
     }
+
+    // sFuel Auto top up system
+    SFuelContractsAddress = "0xc0292e785951B29610D1CC3b32a2C23258622995";      
 
   
     // Deploy Multicall
@@ -231,18 +278,21 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
       let newToken;
       switch (tokenToDeploy.type) {
         case "ERC20":
-          newToken = await hre.ethers.getContractAt("DAOToken", EXDTTokenAddress);
-          console.log("IMPORTING EXISTING ERC20 TOKEN at ",newToken.address)
-        //   newToken = await ERC20Mock.new(accounts[0], tokenTotalSupply.toString());
-        //   await waitBlocks(1);
-        //   for (const tokenHolder of tokenToDeploy.distribution){
-        //       await newToken.transfer(tokenHolder.address, tokenHolder.amount, {
-        //           from: accounts[0],
-        //         });
-        //   }
-        //   break;
+          if(IMPORT_DEPLOYED_BASE){
+            newToken = await hre.ethers.getContractAt("DAOToken", EXDTTokenAddress);
+            console.log("IMPORTING EXISTING ERC20 TOKEN at ",newToken.address)
+          }
+          else{
+            newToken = await ERC20Mock.new(accounts[0], tokenTotalSupply.toString());
+            await waitBlocks(1);
+            for (const tokenHolder of tokenToDeploy.distribution){
+                await newToken.transfer(tokenHolder.address, tokenHolder.amount, {
+                    from: accounts[0],
+                  });
+            }
+            break;
+          } 
       }
-      
       tokens[tokenToDeploy.symbol] = newToken;
       addresses[tokenToDeploy.symbol] = newToken.address;
   }
@@ -306,10 +356,18 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
 
     let config_registry;
         
-    console.log("IMPORTING EXISTING Config Registry at ", ConfigRegistryAddress);
-    config_registry = await hre.ethers.getContractAt("ConfigRegistry", ConfigRegistryAddress);
-    addresses["ConfigRegistry"] = config_registry.address;
-    console.log("Config Registry deployed to ", config_registry.address);
+    if(IMPORT_DEPLOYED_BASE){
+      console.log("IMPORTING EXISTING Config Registry at ", ConfigRegistryAddress);
+      config_registry = await hre.ethers.getContractAt("ConfigRegistry", ConfigRegistryAddress);
+      addresses["ConfigRegistry"] = config_registry.address;
+      console.log("Config Registry deployed to ", config_registry.address);
+    }
+    else{
+      console.log("Deploying Config Registry...");
+      config_registry = await ConfigRegistry.new();
+      addresses["ConfigRegistry"] = config_registry.address;
+      console.log("Config Registry deployed to ", config_registry.address);
+    } 
 
     // Deploy Staking & Rewards & Address Manager
     let staking_manager;
@@ -341,7 +399,6 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     }
     else{   
       rewards_manager = await RewardsManager.new(tokens.EXDT.address);
-      console.log("Rewards Manager deployed to ", rewards_manager.address);
       addresses["RewardsManager"] = rewards_manager.address;     
       console.log("Rewards Manager deployed to ", rewards_manager.address); 
     }  
@@ -354,57 +411,69 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     }
     else{   
       parameters_manager = await Parameters.new();
-      console.log("Parameters Manager deployed to ", parameters_manager.address);
       addresses["Parameters"] = parameters_manager.address;     
       console.log("Parameters Manager deployed to ", parameters_manager.address); 
     }  
     
 
-    console.log("IMPORTING EXISTING Address Manager at ", AddressManagerAddress);
-    address_manager = await hre.ethers.getContractAt("AddressManager", AddressManagerAddress);
-    console.log("Address Manager deployed to ", address_manager.address);
-    addresses["AddressManager"] = address_manager.address;
+    if(IMPORT_DEPLOYED_BASE){
+      console.log("IMPORTING EXISTING Address Manager at ", AddressManagerAddress);
+      address_manager = await hre.ethers.getContractAt("AddressManager", AddressManagerAddress);
+      console.log("Address Manager deployed to ", address_manager.address);
+      addresses["AddressManager"] = address_manager.address;
+    }
+    else{
+      console.log("Deploying AddressManager...");
+      address_manager = await AddressManager.new();
+      addresses["AddressManager"] = address_manager.address;
+      console.log("Address Manager deployed to ", address_manager.address);
+    } 
+    // console.log("IMPORTING EXISTING Address Manager at ", AddressManagerAddress);
+    // address_manager = await hre.ethers.getContractAt("AddressManager", AddressManagerAddress);
+    // console.log("Address Manager deployed to ", address_manager.address);
+    // addresses["AddressManager"] = address_manager.address;
 
     console.log("Setting Address Manager in the Rewards Manager");
     await rewards_manager.updateAddressManager(address_manager.address);
 
 
+    // -------------------------------------------------------------------------------------------------------
+    ////////////////////////////////////////      SPOTTING WORK SYSTEM     //////////////////////////////////////////
     // Deploy WorkSystems
     let spot_worksystem;
     // lib_AttributeStore = await ethers.getContractFactory("lib_AttributeStore");
-      
     let libAttributeStore;
     let libDLL;
-    libAttributeStore = await AttributeStore.new();
-    console.log("Library AttributeStore addr",libAttributeStore.address);
-    libDLL = await DLL.new();
-    console.log("Library DLL addr",libDLL.address);
-
-    console.log("Deploying DataSpotting System...");
-    ////////////////////////////////////////      SPOTTING WORK SYSTEM     //////////////////////////////////////////
-
-    const DataSpottingFactory = await ethers.getContractFactory("DataSpotting", {
-      libraries: { 
-        AttributeStore: libAttributeStore.address,
-        DLL: libDLL.address           
-      },
-    });
-
-    // const _DataSpottingFactory = await DataSpottingFactory.deploy(tokens.EXDT.address);
-    // await _DataSpottingFactory.deployed();
-    // console.log("DataSpotting deployed to ", _DataSpottingFactory.address);
-    // spot_worksystem = _DataSpottingFactory;
-    // addresses["DataSpotting"] = _DataSpottingFactory.address;
 
 
+    if(IMPORT_DEPLOYED_WS){   
+      console.log("IMPORTING EXISTING DataSpotting at ", _dataspot_addr);
+      spot_worksystem = await hre.ethers.getContractAt("DataSpotting", _dataspot_addr);
+      addresses["DataSpotting"] = spot_worksystem.address;
+      console.log("Exorde DataSpotting deployed to:", spot_worksystem.address);
+    }
+    else{
+        
+      libAttributeStore = await AttributeStore.new();
+      console.log("Library AttributeStore addr",libAttributeStore.address);
+      libDLL = await DLL.new();
+      console.log("Library DLL addr",libDLL.address);
 
-    let _dataspot_addr = "0xf7b2f1fB641151e8369a0d91E6B634B6527F18BD";
-    console.log("IMPORTING EXISTING DataSpotting at ", _dataspot_addr);
-    spot_worksystem = await hre.ethers.getContractAt("DataSpotting", _dataspot_addr);
-    addresses["DataSpotting"] = spot_worksystem.address;
-    console.log("Exorde DataSpotting deployed to:", spot_worksystem.address);
+      console.log("Deploying DataSpotting System...");
+      const DataSpottingFactory = await ethers.getContractFactory("DataSpotting", {
+        libraries: { 
+          AttributeStore: libAttributeStore.address,
+          DLL: libDLL.address           
+        },
+      });
 
 
+      const _DataSpottingFactory = await DataSpottingFactory.deploy(tokens.EXDT.address);
+      await _DataSpottingFactory.deployed();
+      console.log("DataSpotting deployed to ", _DataSpottingFactory.address);
+      spot_worksystem = _DataSpottingFactory;
+      addresses["DataSpotting"] = _DataSpottingFactory.address;
+    }
 
     // register the worksystem as allowed to use stakes
     console.log("Add the DataSpotting as allowed to use stakes in StakingManager");
@@ -414,8 +483,9 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
 
     
     // -------------------------------------------------------------------------------------------------------
+    ////////////////////////////////////////      COMPLIANCE WORK SYSTEM     //////////////////////////////////////////
 
-    let format_worksystem;
+    let compliance_worksystem;
     let libAttributeStore2;
     let libDLL2;
 
@@ -424,62 +494,171 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     libDLL2 = await DLL2.new();
     console.log("Library DLL2 addr",libDLL2.address);
 
-    console.log("Deploying DataFormatting System...");
-    ////////////////////////////////////////      FORMATTING WORK SYSTEM     //////////////////////////////////////////
-
-    const DataFormattingFactory = await ethers.getContractFactory("DataFormatting", {
-      libraries: { 
-        AttributeStore2: libAttributeStore2.address,
-        DLL2: libDLL2.address           
-      },
-    });
-
-    // const _DataFormattingFactory = await DataFormattingFactory.deploy(tokens.EXDT.address);
-    // await _DataFormattingFactory.deployed();
-
-
-    // console.log("DataFormatting deployed to ", _DataFormattingFactory.address);
-    // format_worksystem = _DataFormattingFactory;
-    // addresses["DataFormatting"] = _DataFormattingFactory.address;
+    console.log("Deploying DataCompliance System...");
 
     
-    let _dataformat_addr = "0x2a6b5715bB02934fCe0e1FA41976F59f334B3c6E";
-    console.log("IMPORTING EXISTING DataFormatting at ", _dataspot_addr);
-    format_worksystem = await hre.ethers.getContractAt("DataFormatting", _dataformat_addr);
-    addresses["DataFormatting"] = format_worksystem.address;
-    console.log("Exorde DataSpotting deployed to:", format_worksystem.address);
+    if(IMPORT_DEPLOYED_WS){   
+      console.log("IMPORTING EXISTING DataCompliance at ", _dataformat_addr);
+      compliance_worksystem = await hre.ethers.getContractAt("DataCompliance", _dataformat_addr);
+      addresses["DataCompliance"] = compliance_worksystem.address;
+      console.log("Exorde DataCompliance deployed to:", compliance_worksystem.address);
+    }
+    else{        
+      const DataComplianceFactory = await ethers.getContractFactory("DataCompliance", {
+        libraries: { 
+          AttributeStore2: libAttributeStore2.address,
+          DLL2: libDLL2.address           
+        },
+      });
 
+      const _DataComplianceFactory = await DataComplianceFactory.deploy(tokens.EXDT.address);
+      await _DataComplianceFactory.deployed();
+
+
+      console.log("DataCompliance deployed to ", _DataComplianceFactory.address);
+      compliance_worksystem = _DataComplianceFactory;
+      addresses["DataCompliance"] = _DataComplianceFactory.address;
+
+    }
+
+    // register the worksystem as allowed to use stakes
+    console.log("Add the DataCompliance as allowed to use stakes in StakingManager");
+    await staking_manager.addAddress(compliance_worksystem.address);    
+    console.log("Add the DataCompliance as allowed to use stakes in RewardsManager");
+    await rewards_manager.addAddress(compliance_worksystem.address);
+
+    
+    // -------------------------------------------------------------------------------------------------------
+    ////////////////////////////////////////      INDEXING WORK SYSTEM     //////////////////////////////////////////
+
+    let indexing_worksystem;
+    let libAttributeStore3;
+    let libDLL3;
+
+    libAttributeStore3 = await AttributeStore3.new();
+    console.log("Library AttributeStore3 addr",libAttributeStore3.address);
+    libDLL3 = await DLL3.new();
+    console.log("Library DLL3 addr",libDLL3.address);
+
+    console.log("Deploying DataIndexing System...");
+
+    
+    if(IMPORT_DEPLOYED_WS){   
+      console.log("IMPORTING EXISTING DataIndexing at ", _dataindexing_addr);
+      indexing_worksystem = await hre.ethers.getContractAt("DataIndexing", _dataindexing_addr);
+      addresses["DataIndexing"] = indexing_worksystem.address;
+      console.log("Exorde DataIndexing deployed to:", indexing_worksystem.address);
+    }
+    else{        
+      const DataIndexingFactory = await ethers.getContractFactory("DataIndexing", {
+        libraries: { 
+          AttributeStore3: libAttributeStore3.address,
+          DLL3: libDLL3.address           
+        },
+      });
+
+      const _DataIndexingFactory = await DataIndexingFactory.deploy(tokens.EXDT.address);
+      await _DataIndexingFactory.deployed();
+
+
+      console.log("DataIndexing deployed to ", _DataIndexingFactory.address);
+      indexing_worksystem = _DataIndexingFactory;
+      addresses["DataIndexing"] = _DataIndexingFactory.address;
+    }
 
 
     // register the worksystem as allowed to use stakes
-    console.log("Add the DataFormatting as allowed to use stakes in StakingManager");
-    await staking_manager.addAddress(format_worksystem.address);    
-    console.log("Add the DataFormatting as allowed to use stakes in RewardsManager");
-    await rewards_manager.addAddress(format_worksystem.address);
+    console.log("Add the DataIndexing as allowed to use stakes in StakingManager");
+    await staking_manager.addAddress(indexing_worksystem.address);    
+    console.log("Add the DataIndexing as allowed to use stakes in RewardsManager");
+    await rewards_manager.addAddress(indexing_worksystem.address);
 
-    ///////////// WORKSYSTEM BI DIRECTIONAL LINKING /////////////
-    console.log("[PIPELINE LINK] Add the DataSpotting to be referenced in the DataFormatting contract")
-    await format_worksystem.updateSpotManager(addresses["DataSpotting"]);
-    console.log("[PIPELINE LINK] Add the DataFormatting to be referenced in the DataSpotting contract")
-    await spot_worksystem.updateFormattingSystem(addresses["DataFormatting"])
+
     // -------------------------------------------------------------------------------------------------------
+    ////////////////////////////////////////      ARCHIVING WORK SYSTEM     //////////////////////////////////////////
+    let archiving_worksystem;
+    let libAttributeStore4;
+    let libDLL4;
+
+    libAttributeStore4 = await AttributeStore4.new();
+    console.log("Library AttributeStore4 addr",libAttributeStore4.address);
+    libDLL4 = await DLL4.new();
+    console.log("Library DLL4 addr",libDLL4.address);
+
+    console.log("Deploying DataArchiving System...");
 
     
-    console.log("IMPORTING EXISTING DataArchive at ", DataArchiveAddress);
-    data_archive = await hre.ethers.getContractAt("DataArchive", DataArchiveAddress);
-    addresses["DataArchive"] = data_archive.address;
-    console.log("Data Archive deployed to ", data_archive.address);
+    if(IMPORT_DEPLOYED_WS){   
+      console.log("IMPORTING EXISTING DataArchiving at ", _DataArchiving_addr);
+      archiving_worksystem = await hre.ethers.getContractAt("DataArchiving", _DataArchiving_addr);
+      addresses["DataArchiving"] = archiving_worksystem.address;
+      console.log("Exorde DataArchiving deployed to:", archiving_worksystem.address);
+    }
+    else{        
+      const DataArchivingFactory = await ethers.getContractFactory("DataArchiving", {
+        libraries: { 
+          AttributeStore4: libAttributeStore4.address,
+          DLL4: libDLL4.address           
+        },
+      });
+
+      const _DataArchivingFactory = await DataArchivingFactory.deploy(tokens.EXDT.address);
+      await _DataArchivingFactory.deployed();
+
+
+      console.log("DataArchiving deployed to ", _DataArchivingFactory.address);
+      archiving_worksystem = _DataArchivingFactory;
+      addresses["DataArchiving"] = _DataArchivingFactory.address;
+    }
+
+
+    // register the worksystem as allowed to use stakes
+    console.log("Add the DataArchiving as allowed to use stakes in StakingManager");
+    await staking_manager.addAddress(archiving_worksystem.address);    
+    console.log("Add the DataArchiving as allowed to use stakes in RewardsManager");
+    await rewards_manager.addAddress(archiving_worksystem.address);
+
+    // -------------------------------------------------------------------------------------------------------
+    // -------------------------------------------------------------------------------------------------------
+    // -------------------------------------------------------------------------------------------------------
+
+    await waitBlocks(1);
+    ///////////// WORKSYSTEM BI DIRECTIONAL LINKING /////////////
+    console.log("[PIPELINE LINK] Add the DataSpotting to be referenced in the DataCompliance contract")
+    await compliance_worksystem.updatePreviousSystem(addresses["DataSpotting"]);
+    console.log("[PIPELINE LINK] Add the DataCompliance to be referenced in the DataSpotting contract")
+    await spot_worksystem.updateFollowingSystem(addresses["DataCompliance"])
+    // -------------------------------------------------------------------------------------------------------
+
+    await waitBlocks(1);
+    
+    
+
+    if(IMPORT_DEPLOYED_BASE){
+      console.log("IMPORTING EXISTING DataArchive at ", DataArchiveAddress);
+      data_archive = await hre.ethers.getContractAt("DataArchive", DataArchiveAddress);
+      addresses["DataArchive"] = data_archive.address;
+      console.log("Data Archive deployed to ", data_archive.address);
+    }
+    else{    
+      console.log("Deploying DataArchive...");
+      data_archive = await DataArchive.new(addresses["EXDT"], addresses["DataCompliance"]);
+      addresses["DataArchive"] = data_archive.address;
+      console.log("Data Archive deployed to ", data_archive.address);
+    }
+
 
     ///////////// WORKSYSTEM BI DIRECTIONAL LINKING /////////////
-    console.log("[PIPELINE LINK] Add the DataFormatting to be referenced in the DataArchive contract")
-    await data_archive.updatePreviousSystem(addresses["DataFormatting"]);
-    console.log("[PIPELINE LINK] Add the DataArchive to be referenced in the DataFormatting contract")
-    await format_worksystem.updateArchiveManager(addresses["DataArchive"])
+    console.log("[PIPELINE LINK] Add the DataCompliance to be referenced in the DataArchive contract")
+    await data_archive.updatePreviousSystem(addresses["DataCompliance"]);
+    console.log("[PIPELINE LINK] Add the DataArchive to be referenced in the DataCompliance contract")
+    await compliance_worksystem.updateArchiveManager(addresses["DataArchive"])
     // console.log("Add the DataArchive as allowed to use stakes in StakingManager");
     // await staking_manager.addAddress(data_archive.address);    
     // console.log("Add the DataArchive as allowed to use stakes in RewardsManager");
     // await rewards_manager.addAddress(data_archive.address);
 
+    await waitBlocks(1);
     // -------------------------------------------------------------------------------------------------------
 
     let sfuelcontract;
@@ -487,13 +666,15 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     sfuelcontract = await hre.ethers.getContractAt("SFuelContracts", SFuelContractsAddress);
     console.log("Allow worksystems to topup sFuel");
     await sfuelcontract.addAddress(addresses["DataSpotting"])
-    await sfuelcontract.addAddress(addresses["DataFormatting"])
+    await sfuelcontract.addAddress(addresses["DataCompliance"])
 
-    if(networkName == 'schain'){
-      await spot_worksystem.updatesFuelFaucet(SFuelContractsAddress)
-      await format_worksystem.updatesFuelFaucet(SFuelContractsAddress)
+    console.log("ADD PARAMETERS TO PARAMETERS MANAGER");
+    if(networkName.startsWith('schain')){
+      await parameters_manager.updateContractsAddresses(staking_manager.address, reputation.address, rewards_manager.address, address_manager.address,
+        addresses["DataSpotting"], addresses["DataCompliance"], sfuelcontract.address, tokens.EXDT.address)
     }
 
+    await waitBlocks(1);
 
     // -------------------------------------------------------------------------------------------------------
 
@@ -595,7 +776,7 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
 
       console.log("Permission Registry deployed to:", permissionRegistry.address);
       networkContracts.permissionRegistry = permissionRegistry.address;
-      addresses["PermissionRegstry"] = permissionRegistry.address;
+      addresses["PermissionRegistry"] = permissionRegistry.address;
       await waitBlocks(1);
     }  
 
@@ -854,28 +1035,30 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     // --------------------- MASTER WALLET REPUTATION FOR WORKSYSTEMS
     console.log("\n\nAdd the DataSpotting as allowed to mint Reputation in MasterWallet");
     await masterWallet.addWorksystemAddress(spot_worksystem.address);
-    console.log("Add the DataFormatting as allowed to mint Reputation in MasterWallet\n");
-    await masterWallet.addWorksystemAddress(format_worksystem.address);
+    console.log("Add the DataCompliance as allowed to mint Reputation in MasterWallet\n");
+    await masterWallet.addWorksystemAddress(compliance_worksystem.address);
 
+    await waitBlocks(1);
     console.log("\n\nAdd the AddressManager as allowed to mint Reputation in MasterWallet");
     await masterWallet.addWorksystemAddress(address_manager.address);
     console.log("Add the AddressManager as allowed to use Rewards in RewardsManager");
     await rewards_manager.addAddress(address_manager.address);
     
 
+    await waitBlocks(1);
     // --------------------- WORKSYSTEMS: LINK Stake, Rewards, Rep & Address to the system
     console.log("\n\nUpdate Stake/Rewards & Reputation Managers in the DataSpotting contract\n");
     await spot_worksystem.updateStakeManager(staking_manager.address);    
     await spot_worksystem.updateRewardManager(rewards_manager.address);    
     await spot_worksystem.updateRepManager(masterWallet.address);
-    await spot_worksystem.updateAddressManager(masterWallet.address);
+    await spot_worksystem.updateAddressManager(address_manager.address);
     await spot_worksystem.updateParametersManager(parameters_manager.address);
-    console.log("Update Stake/Rewards & Reputation Managers in the DataFormatting contract\n");    
-    await format_worksystem.updateStakeManager(staking_manager.address);    
-    await format_worksystem.updateRewardManager(rewards_manager.address);    
-    await format_worksystem.updateRepManager(masterWallet.address);
-    await format_worksystem.updateAddressManager(masterWallet.address);    
-    await format_worksystem.updateParametersManager(parameters_manager.address);
+    console.log("Update Stake/Rewards & Reputation Managers in the DataCompliance contract\n");    
+    await compliance_worksystem.updateStakeManager(staking_manager.address);    
+    await compliance_worksystem.updateRewardManager(rewards_manager.address);    
+    await compliance_worksystem.updateRepManager(masterWallet.address);
+    await compliance_worksystem.updateAddressManager(address_manager.address);    
+    await compliance_worksystem.updateParametersManager(parameters_manager.address);
     console.log("Update Stake/Rewards/Rep & Reputation Managers in the AddressManager contract\n");    
     await address_manager.updateRewardManager(rewards_manager.address);    
     await address_manager.updateRepManager(masterWallet.address);
@@ -888,22 +1071,22 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     // await format_worksystem.transferOwnership(controller.address);
     // await staking_manager.transferOwnership(controller.address);
 
-    // Deploy dxDaoNFT
-    let dxDaoNFT;
-    console.log("Deploying ERC721Factory...");
-    dxDaoNFT = await ERC721Factory.new("DX DAO NFT", "DXDNFT");
-    networkContracts.utils.dxDaoNFT = dxDaoNFT.address;
-    addresses["ERC721Factory"] = dxDaoNFT.address;
+    // // Deploy dxDaoNFT
+    // let dxDaoNFT;
+    // console.log("Deploying ERC721Factory...");
+    // dxDaoNFT = await ERC721Factory.new("DX DAO NFT", "DXDNFT");
+    // networkContracts.utils.dxDaoNFT = dxDaoNFT.address;
+    // addresses["ERC721Factory"] = dxDaoNFT.address;
 
-    // Deploy ERC20VestingFactory
-    let dxdVestingFactory;
-    console.log("Deploying ERC20VestingFactory...");
-    dxdVestingFactory = await ERC20VestingFactory.new(
-      networkContracts.votingMachines[votingMachine.address].token,
-      avatar.address
-    );
-    networkContracts.utils.dxdVestingFactory = dxdVestingFactory.address;
-    addresses["ERC20VestingFactory"] = dxdVestingFactory.address;
+    // // Deploy ERC20VestingFactory
+    // let dxdVestingFactory;
+    // console.log("Deploying ERC20VestingFactory...");
+    // dxdVestingFactory = await ERC20VestingFactory.new(
+    //   networkContracts.votingMachines[votingMachine.address].token,
+    //   avatar.address
+    // );
+    // networkContracts.utils.dxdVestingFactory = dxdVestingFactory.address;
+    // addresses["ERC20VestingFactory"] = dxdVestingFactory.address;
 
     // Transfer all ownership and power to the dao
     console.log("Transfering ownership...");
