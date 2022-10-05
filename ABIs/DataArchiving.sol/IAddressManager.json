@@ -1,7 +1,7 @@
 {
   "_format": "hh-sol-artifact-1",
   "contractName": "IAddressManager",
-  "sourceName": "contracts/worksystems/DataSpotting.sol",
+  "sourceName": "contracts/worksystems/DataArchiving.sol",
   "abi": [
     {
       "inputs": [
