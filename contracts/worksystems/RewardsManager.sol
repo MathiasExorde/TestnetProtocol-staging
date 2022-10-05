@@ -104,23 +104,23 @@ contract RewardsManager is Ownable{
         return(false);
     }
     
-    /**
-     * @notice A method for a verified whitelisted contract to allocate for itself some Rewards // nonReentrant()
-     */
-    function ProxyTransferRewards(address _user, address _recipient) 
-        external
-        returns(bool)
-    {
-        require(isRewardsWhitelisted(msg.sender), "RewardsManager: sender must be whitelisted to Proxy act");
-        // check if the contract calling this method has rights to allocate from user Rewards
-        uint256 user_rewards_ = rewards[_user];
-        if(user_rewards_ > 0){
-            rewards[_user] = rewards[_user].sub(user_rewards_);
-            rewards[_recipient] = rewards[_recipient].add(user_rewards_);
-            return true;
-        }
-        return(false);
-    }
+    // /**
+    //  * @notice A method for a verified whitelisted contract to allocate for itself some Rewards // nonReentrant()
+    //  */
+    // function ProxyTransferRewards(address _user, address _recipient) 
+    //     external
+    //     returns(bool)
+    // {
+    //     require(isRewardsWhitelisted(msg.sender), "RewardsManager: sender must be whitelisted to Proxy act");
+    //     // check if the contract calling this method has rights to allocate from user Rewards
+    //     uint256 user_rewards_ = rewards[_user];
+    //     if(user_rewards_ > 0){
+    //         rewards[_user] = rewards[_user].sub(user_rewards_);
+    //         rewards[_recipient] = rewards[_recipient].add(user_rewards_);
+    //         return true;
+    //     }
+    //     return(false);
+    // }
 
     function RewardsBalanceOf(address _address)
         public
@@ -194,20 +194,20 @@ contract RewardsManager is Ownable{
     
        
     function WithdrawSubworker(uint _numTokens, address _worker) external {
-        require(address(AddressManager) != address(0)); // check if AddressManager is set
-        require(ManagerBalance >= _numTokens);
+        require(address(AddressManager) != address(0), "AddressManager is not setup"); // check if AddressManager is set
+        require(ManagerBalance >= _numTokens, "ManagerBalance has to be >= _numTokens");
         require(AddressManager.isSubAddress(msg.sender, _worker)); //1st is supposed master, 2nd is sub address
         rewards[_worker] -= _numTokens;
-        require(token.transfer(msg.sender, _numTokens));
+        require(token.transfer(msg.sender, _numTokens), "Token Transfer failed");
     }
 
     function withdrawSubworkerAllRewards(address _worker) external {
-        require(address(AddressManager) != address(0)); // check if AddressManager is set
-        require(ManagerBalance >= rewards[_worker]);
+        require(address(AddressManager) != address(0), "AddressManager is not setup"); // check if AddressManager is set
+        require(ManagerBalance >= rewards[_worker], "ManagerBalance has to be >= worker rewards");
         require(AddressManager.isSubAddress(msg.sender, _worker)); //1st is supposed master, 2nd is sub address
         uint256 all_rewards = rewards[msg.sender];
         rewards[msg.sender] = 0;
-        require(token.transfer(msg.sender, all_rewards));
+        require(token.transfer(msg.sender, all_rewards), "Token Transfer failed");
     }
 
     // ---------- OWNER RARE MECHANISMS ----------
@@ -218,9 +218,9 @@ contract RewardsManager is Ownable{
     @param _numTokens The number of ERC20 tokens desired in exchange for voting rights
     */
     function OwnerWithdraw(uint _numTokens) external onlyOwner {
-        require(ManagerBalance >= _numTokens);
+        require(ManagerBalance >= _numTokens, "ManagerBalance has to be >= _numTokens");
         ManagerBalance -= _numTokens;
-        require(token.transfer(msg.sender, _numTokens));
+        require(token.transfer(msg.sender, _numTokens), "Token Transfer failed");
     }
     
     function GetTotalGivenRewards() public view returns(uint256) {
@@ -232,7 +232,7 @@ contract RewardsManager is Ownable{
     @notice Withdraw _numTokens ERC20 tokens from the voting contract, revoking these voting rights
     */
     function OwnerWithdrawAllRewards() external onlyOwner {
-        require(ManagerBalance > 0);
+        require(ManagerBalance > 0, "ManagerBalance has to be > 0");
         uint256 sum = rewards[msg.sender];
         rewards[msg.sender] = 0;
         require(token.transfer(msg.sender, sum));

@@ -299,7 +299,7 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
     balances[msg.sender].free_balance += tokens;
 
     // transfer the tokens from the sender to this contract
-    require(token.transferFrom(msg.sender, address(this), tokens));
+    require(token.transferFrom(msg.sender, address(this), tokens),"Token transfer failed");
   }
   
   
@@ -310,7 +310,7 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
     function withdraw(uint _numTokens) public 
     {
         require(balances[msg.sender].free_balance >= _numTokens, "not enough tokens in the free staked balance to withdraw");
-        require(token.transfer(msg.sender, _numTokens));
+        require(token.transfer(msg.sender, _numTokens),"Token transfer failed");
         balances[msg.sender].free_balance -= _numTokens;
     }
     
@@ -318,7 +318,7 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
     function withdrawAll() public     
     {
         require(balances[msg.sender].free_balance > 0);
-        require(token.transfer(msg.sender, balances[msg.sender].free_balance));
+        require(token.transfer(msg.sender, balances[msg.sender].free_balance),"Token transfer failed");
         balances[msg.sender].free_balance = 0;
     }
     

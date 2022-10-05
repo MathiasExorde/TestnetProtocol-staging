@@ -26,8 +26,10 @@ contract Parameters is Ownable {
     uint256 public SPOT_MAX_CONSENSUS_WORKER_COUNT  = 4;
     uint256 public SPOT_COMMIT_ROUND_DURATION = 180;
     uint256 public SPOT_REVEAL_ROUND_DURATION = 180;       
-    uint256 public SPOT_MIN_REWARD_Data = 2 * (10 ** 18);
-    uint256 public SPOT_MIN_REP_Data  = 40 * (10 ** 18);
+    uint256 public SPOT_MIN_REWARD_SpotData = 1 * (10 ** 15);
+    uint256 public SPOT_MIN_REP_SpotData  = 10 * (10 ** 15);
+    uint256 public SPOT_MIN_REWARD_DataValidation = 1 * (10 ** 15);
+    uint256 public SPOT_MIN_REP_DataValidation  = 10 * (10 ** 15);
     // SPOT DATA LIMITATIONS
     uint256 public SPOT_INTER_ALLOCATION_DURATION = 400;
     bool public SPOT_TOGGLE_ENABLED = true;
@@ -44,8 +46,8 @@ contract Parameters is Ownable {
     uint256 public FORMAT_MIN_STAKE = 25 * (10 ** 18); 
     uint256 public FORMAT_COMMIT_ROUND_DURATION = 400;
     uint256 public FORMAT_REVEAL_ROUND_DURATION = 180;  
-    uint256 public FORMAT_MIN_REWARD_Data = 3 * (10 ** 18);
-    uint256 public FORMAT_MIN_REP_Data  = 50 * (10 ** 18);
+    uint256 public FORMAT_MIN_REWARD_DataValidation = 1 * (10 ** 15);
+    uint256 public FORMAT_MIN_REP_DataValidation  = 10 * (10 ** 15);
     //////////////// CONTRACTS
     address public token;
     address public StakeManager;
@@ -53,8 +55,10 @@ contract Parameters is Ownable {
     address public RewardManager;
     address public AddressManager;
     address public SpottingSystem;
-    address public FormattingSystem;
-    address public sFuel;
+    address public ComplianceSystem;
+    address public IndexingSystem;
+    address public ArchivingSystem;
+    address public sFuel = 0xc0292e785951B29610D1CC3b32a2C23258622995;
 
     
 // for other contracts
@@ -71,7 +75,7 @@ contract Parameters is Ownable {
 //     function getRepManager() external view returns(address);
 //     function getRewardManager() external view returns(address);
 //     function getSpottingSystem() external view returns(address);
-//     function getFormattingSystem() external view returns(address);
+//     function getComplianceSystem() external view returns(address);
 //     function getsFuelSystem() external view returns(address);
 //     function getExordeToken() external view returns(address);
 //     // -------------- GETTERS : SPOTTING --------------------
@@ -81,8 +85,10 @@ contract Parameters is Ownable {
 //     function get_SPOT_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
 //     function get_SPOT_COMMIT_ROUND_DURATION() external view returns(uint256);
 //     function get_SPOT_REVEAL_ROUND_DURATION() external view returns(uint256);
-//     function get_SPOT_MIN_REP_Data() external view returns(uint256);
-//     function get_SPOT_MIN_REWARD_Data() external view returns(uint256);
+//     function get_SPOT_MIN_REP_SpotData() external view returns(uint256);
+//     function get_SPOT_MIN_REWARD_SpotData() external view returns(uint256);
+//     function get_SPOT_MIN_REP_DataValidation() external view returns(uint256);
+//     function get_SPOT_MIN_REWARD_DataValidationData() external view returns(uint256);
 //     function get_SPOT_INTER_ALLOCATION_DURATION() external view returns(uint256);
 //     function get_SPOT_TOGGLE_ENABLED() external view returns(bool);
 //     function get_SPOT_TIMEFRAME_DURATION() external view returns(uint256);
@@ -117,7 +123,7 @@ contract Parameters is Ownable {
 
 
     function updateContractsAddresses(address StakeManager_, address RepManager_, address RewardManager_, address AddressManager_,
-                                      address SpottingSystem_, address FormattingSystem_, address sFuel_, address token_) public  onlyOwner {
+                                      address SpottingSystem_, address ComplianceSystem_, address sFuel_, address token_) public  onlyOwner {
         if(StakeManager_ != address(0)){
             StakeManager = StakeManager_;
         }
@@ -133,8 +139,8 @@ contract Parameters is Ownable {
         if(SpottingSystem_ != address(0)){
             SpottingSystem = SpottingSystem_;
         }
-        if(FormattingSystem_ != address(0)){
-            FormattingSystem = FormattingSystem_;
+        if(ComplianceSystem_ != address(0)){
+            ComplianceSystem = ComplianceSystem_;
         }
         if(sFuel_ != address(0)){
             sFuel = sFuel_;
@@ -166,34 +172,40 @@ contract Parameters is Ownable {
             SPOT_REVEAL_ROUND_DURATION  = uintValue;
         }
         if(ParameterIndex == 7){
-            SPOT_MIN_REWARD_Data  = uintValue;
+            SPOT_MIN_REWARD_SpotData  = uintValue;
         }
         if(ParameterIndex == 8){
-            SPOT_MIN_REP_Data  = uintValue;
+            SPOT_MIN_REP_SpotData  = uintValue;
         }
-        // Spotting DataInput Management system
         if(ParameterIndex == 9){
-            SPOT_INTER_ALLOCATION_DURATION = uintValue;
+            SPOT_MIN_REWARD_DataValidation  = uintValue;
         }
         if(ParameterIndex == 10){
-            SPOT_TOGGLE_ENABLED = boolValue;
+            SPOT_MIN_REP_DataValidation  = uintValue;
         }
+        // Spotting DataInput Management system
         if(ParameterIndex == 11){
-            SPOT_TIMEFRAME_DURATION = uintValue;
+            SPOT_INTER_ALLOCATION_DURATION = uintValue;
         }
         if(ParameterIndex == 12){
-            SPOT_GLOBAL_MAX_SPOT_PER_PERIOD = uintValue;
+            SPOT_TOGGLE_ENABLED = boolValue;
         }
         if(ParameterIndex == 13){
-            SPOT_MAX_SPOT_PER_USER_PER_PERIOD = uintValue;
+            SPOT_TIMEFRAME_DURATION = uintValue;
         }
         if(ParameterIndex == 14){
-            SPOT_NB_TIMEFRAMES = uintValue;
+            SPOT_GLOBAL_MAX_SPOT_PER_PERIOD = uintValue;
         }
         if(ParameterIndex == 15){
-            MAX_SUCCEEDING_NOVOTES = uintValue;
+            SPOT_MAX_SPOT_PER_USER_PER_PERIOD = uintValue;
         }
         if(ParameterIndex == 16){
+            SPOT_NB_TIMEFRAMES = uintValue;
+        }
+        if(ParameterIndex == 17){
+            MAX_SUCCEEDING_NOVOTES = uintValue;
+        }
+        if(ParameterIndex == 18){
             NOVOTE_REGISTRATION_WAIT_DURATION = uintValue;
         }
     }
@@ -219,10 +231,10 @@ contract Parameters is Ownable {
             FORMAT_REVEAL_ROUND_DURATION  = uintValue;
         }
         if(ParameterIndex == 7){
-            FORMAT_MIN_REWARD_Data  = uintValue;
+            FORMAT_MIN_REP_DataValidation  = uintValue;
         }
         if(ParameterIndex == 8){
-            FORMAT_MIN_REP_Data  = uintValue;
+            FORMAT_MIN_REWARD_DataValidation  = uintValue;
         }
     }
 
@@ -254,8 +266,8 @@ contract Parameters is Ownable {
     function getSpottingSystem() public view returns(address){
         return SpottingSystem;
     }
-    function getFormattingSystem() public view returns(address){
-        return FormattingSystem;
+    function getComplianceSystem() public view returns(address){
+        return ComplianceSystem;
     }
     function getsFuelSystem() public view returns(address){
         return sFuel;
@@ -283,11 +295,17 @@ contract Parameters is Ownable {
     function get_SPOT_REVEAL_ROUND_DURATION() public view returns(uint256){
         return SPOT_REVEAL_ROUND_DURATION;
     }
-    function get_SPOT_MIN_REP_Data() public view returns(uint256){
-        return SPOT_MIN_REP_Data;
+    function get_SPOT_MIN_REP_SpotData() public view returns(uint256){
+        return SPOT_MIN_REP_SpotData;
     }
-    function get_SPOT_MIN_REWARD_Data() public view returns(uint256){
-        return SPOT_MIN_REWARD_Data;
+    function get_SPOT_MIN_REWARD_SpotData() public view returns(uint256){
+        return SPOT_MIN_REWARD_SpotData;
+    }
+    function get_SPOT_MIN_REP_DataValidation() public view returns(uint256){
+        return SPOT_MIN_REP_DataValidation;
+    }
+    function get_SPOT_MIN_REWARD_DataValidation() public view returns(uint256){
+        return SPOT_MIN_REWARD_DataValidation;
     }
     function get_SPOT_INTER_ALLOCATION_DURATION() public view returns(uint256){
         return SPOT_INTER_ALLOCATION_DURATION;
@@ -333,10 +351,10 @@ contract Parameters is Ownable {
     function get_FORMAT_REVEAL_ROUND_DURATION() public view returns(uint256){
         return FORMAT_REVEAL_ROUND_DURATION;
     }
-    function get_FORMAT_MIN_REWARD_Data() public view returns(uint256){
-        return FORMAT_MIN_REWARD_Data;
+    function get_FORMAT_MIN_REWARD_DataValidation() public view returns(uint256){
+        return FORMAT_MIN_REWARD_DataValidation;
     }
-    function get_FORMAT_MIN_REP_Data() public view returns(uint256){
-        return FORMAT_MIN_REP_Data;
+    function get_FORMAT_MIN_REP_DataValidation() public view returns(uint256){
+        return FORMAT_MIN_REP_DataValidation;
     }
 }

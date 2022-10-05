@@ -173,7 +173,6 @@ contract AddressManager is Ownable{
     function MasterClaimSub(address _address)
         public
     {
-        require(MasterClaimingWorker[msg.sender][_address] != true, "Master already claiming this Sub Address");
         MasterClaimingWorker[msg.sender][_address] = true;
         MasterToSubsMap[msg.sender].push(_address);
         emit AddressAddedByMaster(msg.sender, _address);
@@ -265,7 +264,6 @@ contract AddressManager is Ownable{
     function ClaimMaster(address _master)
         public
     {
-        require(WorkerClaimingMaster[_master][msg.sender] != true, "Can't claim Master: already claiming this address");
         WorkerClaimingMaster[_master][msg.sender] = true;
         SubToMasterMap[msg.sender] = _master; //overwrite, 1->1 link, Sub to Master
         TransferRepToMaster(msg.sender);

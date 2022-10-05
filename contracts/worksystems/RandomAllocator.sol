@@ -39,8 +39,8 @@ contract RandomAllocator {
      * @return value of 'number'
      */
      function generateIntegers(uint256 _k, uint256 N_range) public view returns (uint256[] memory){
-        require(_k >= 0);
-        require(N_range > 0);
+        require(_k >= 0, "_k >= 0");
+        require(N_range > 0,"N_range > 0");
         
 
         uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp + uint256(keccak256(abi.encodePacked(getSeed())))+ ((uint256(keccak256(abi.encodePacked(block.coinbase))))))));
@@ -75,7 +75,7 @@ contract RandomAllocator {
      * @return value of 'number'
      */
     function shuffle_array_(uint256[] memory _myArray) private view returns(uint256[] memory){
-        require(_myArray.length > 0);
+        require(_myArray.length > 0, "_myArray.length > 0");
         uint256 a = _myArray.length;
         uint256 b = _myArray.length;
         for(uint256 i = 0; i< b ; i++){
@@ -108,7 +108,7 @@ contract RandomAllocator {
 
 
     function shuffle_array(uint256 N) public view returns(uint256[] memory){
-        require(N > 0);
+        require(N > 0, "N > 0");
         uint256[] memory indexArray = new uint256[](N);
         uint256[] memory  array = shuffle_array_(reset_index_array(indexArray));
         uint256[] memory result;

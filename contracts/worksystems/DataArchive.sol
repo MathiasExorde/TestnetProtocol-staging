@@ -3,112 +3,6 @@
 
 pragma solidity 0.8.0;
 
-// library AttributeStore2 {
-//     struct FormattedData {
-//         mapping(bytes32 => uint256) store;
-//     }
-
-//     function getAttribute(FormattedData storage self, bytes32  _UUID, string memory _attrName)
-//     public view returns (uint256) {
-        
-//         bytes32 key = keccak256(abi.encodePacked(_UUID, _attrName));
-//         return self.store[key];
-//     }
-
-//     function setAttribute(FormattedData storage self, bytes32 _UUID, string memory _attrName, uint256 _attrVal)
-//     public {
-//         bytes32 key = keccak256(abi.encodePacked(_UUID, _attrName));
-//         self.store[key] = _attrVal;
-//     }
-// }
-
-// // File: dll/DLL.sol
-
-// library DLL2 {
-
-//   uint256 constant NULL_NODE_ID = 0;
-
-//   struct Node {
-//     uint256 next;
-//     uint256 prev;
-//   }
-
-//   struct FormattedData {
-//     mapping(uint256 => Node) dll;
-//   }
-
-//   function isEmpty(FormattedData storage self) public view returns (bool) {
-//     return getStart(self) == NULL_NODE_ID;
-//   }
-
-//   function contains(FormattedData storage self, uint256 _curr) public view returns (bool) {
-//     if (isEmpty(self) || _curr == NULL_NODE_ID) {
-//       return false;
-//     } 
-
-//     bool isSingleNode = (getStart(self) == _curr) && (getEnd(self) == _curr);
-//     bool isNullNode = (getNext(self, _curr) == NULL_NODE_ID) && (getPrev(self, _curr) == NULL_NODE_ID);
-//     return isSingleNode || !isNullNode;
-//   }
-
-//   function getNext(FormattedData storage self, uint256 _curr) public view returns (uint256) {
-//     return self.dll[_curr].next;
-//   }
-
-//   function getPrev(FormattedData storage self, uint256 _curr) public view returns (uint256) {
-//     return self.dll[_curr].prev;
-//   }
-
-//   function getStart(FormattedData storage self) public view returns (uint256) {
-//     return getNext(self, NULL_NODE_ID);
-//   }
-
-//   function getEnd(FormattedData storage self) public view returns (uint256) {
-//     return getPrev(self, NULL_NODE_ID);
-//   }
-
-//   /**
-//   @dev Inserts a new node between _prev and _next. When inserting a node already existing in 
-//   the list it will be automatically removed from the old position.
-//   @param _prev the node which _new will be inserted after
-//   @param _curr the id of the new node being inserted
-//   @param _next the node which _new will be inserted before
-//   */
-//   function insert(FormattedData storage self, uint256 _prev, uint256 _curr, uint256 _next) public {
-//     require(_curr != NULL_NODE_ID,"error: could not insert, 1");
-
-//     remove(self, _curr);
-
-//     require(_prev == NULL_NODE_ID || contains(self, _prev),"error: could not insert, 2");
-//     require(_next == NULL_NODE_ID || contains(self, _next),"error: could not insert, 3");
-
-//     require(getNext(self, _prev) == _next,"error: could not insert, 4");
-//     require(getPrev(self, _next) == _prev,"error: could not insert, 5");
-
-//     self.dll[_curr].prev = _prev;
-//     self.dll[_curr].next = _next;
-
-//     self.dll[_prev].next = _curr;
-//     self.dll[_next].prev = _curr;
-//   }
-
-//   function remove(FormattedData storage self, uint256 _curr) public {
-//     if (!contains(self, _curr)) {
-//       return;
-//     }
-
-//     uint256 next = getNext(self, _curr);
-//     uint256 prev = getPrev(self, _curr);
-
-//     self.dll[next].prev = prev;
-//     self.dll[prev].next = next;
-
-//     delete self.dll[_curr];
-//   }
-// }
-
-
-
 interface IStakeManager {
     function ProxyStakeAllocate(uint256 _StakeAllocation, address _stakeholder) external returns(bool);
     function ProxyStakeDeallocate(uint256 _StakeToDeallocate, address _stakeholder) external returns(bool);
@@ -140,6 +34,7 @@ interface IFormattingSystem {
         FLAGGED
     }
 
+    // ------ Data batch Structure
     struct BatchMetadata {
         uint256 start_idx;
         uint256 counter;
@@ -157,12 +52,14 @@ interface IFormattingSystem {
         DataStatus status;                 // state of the vote
     }
 
+    // ------ Atomic Data Structure
     struct FormattedData {
         string ipfs_hash;                      // expiration date of commit period for FormattedData
         address author;                         // author of the proposal
         uint256 timestamp;                      // expiration date of commit period for FormattedData
         DataStatus status;                 // state of the vote
     }
+
     function getIPFShashesForBatch(uint256 _DataBatchId) external returns (string[] memory);
 
     function getDomainsForBatch(uint256 _DataBatchId) external returns (string[] memory);
@@ -191,28 +88,6 @@ import "./RandomAllocator.sol";
 */
 contract DataArchive is Ownable, RandomAllocator {
 
-    // ================================================================================================
-    // Success ratios of the WorkSystem pipeline are defined depending on task subjectivity & complexity.
-    //     Desired overall success ratio is defined as the following: Data Output flux >= 0.80 Data Input Flux. This translates 
-    //     in the following:
-    //         - Formatting: 0. 90%
-    //         - Archive-Checking: 0.99%
-    //         - Formatting: 0.95%
-    //         - Archive-Checking: 0.99%
-    //         - Archiving: 0.99%
-    //         - Archive-Checking: 0.99%            
-    // ================================================================================================
-    //     This leaves room for 1% spread out on "frozen stakes" (stakes that are attributed to work that is never processed
-    //     by the rest of the pipeline) & flagged content. This is allocated as follows: 
-    //         - Frozen Archive Stakes: 0.3%
-    //         - Frozen Archive-Checking Stakes: 0.2%
-    //         - Frozen Formatting Stakes: 0.2%
-    //         - Frozen Archive-Checking Stakes: 0.1%
-    //         - Frozen Archiving Stakes: 0.1%
-    //         - Flagged Content: 0.1%
-    // ================================================================================================
-
-    
     // ============
     // EVENTS:
     // ============
