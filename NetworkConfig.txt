@@ -1,1 +1,8 @@
-{"_urlPinata":"https://exorde-testnet.mypinata.cloud/ipfs/","_urlSkale":"https://staging-v2.skalenodes.com/v1/rapping-zuben-elakrab","_chainID": "1305754875840118", "_blockExplorer":"https://rapping-zuben-elakrab.explorer.staging-v2.skalenodes.com/"}
+{
+  "_urlSkale": "https://staging-v2.skalenodes.com/v1/shapely-dschubba",
+  "_chainID": "0x1bf548f30e9ad",
+  "_blockExplorer": "https://shapely-dschubba.explorer.staging-v2.skalenodes.com/",
+  "_fileStorage": "https://staging-v2.skalenodes.com/fs/shapely-dschubba",
+  "_chainNameHash": "0x1bf548f30e9ad0078a81737973648281b1165dcdd7fdb69fa2db8ef7aacab134",
+  "_webSocket": "wss://staging-v2.skalenodes.com/v1/ws/shapely-dschubba"
+}
