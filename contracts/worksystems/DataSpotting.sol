@@ -120,7 +120,8 @@ interface IParametersManager {
     function getStakeManager() external view returns(address);
     function getRepManager() external view returns(address);
     function getRewardManager() external view returns(address);
-    function getComplianceSystem() external view returns(address);
+    function getSpottingSystem() external view returns(address);
+    function getFormattingSystem() external view returns(address);
     function getsFuelSystem() external view returns(address);
     function getExordeToken() external view returns(address);
     // -------------- GETTERS : SPOTTING --------------------
@@ -165,7 +166,7 @@ interface IAddressManager {
     function FetchHighestMaster(address _worker) external view returns (address);
 }
 
-interface IFollowingSystem {
+interface IFormattingSystem {
     function Ping(uint256 CheckedBatchId) external;        
     function TriggerUpdate() external;    
 }
@@ -342,7 +343,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     IRepManager public RepManager;
     IRewardManager public RewardManager;
     IAddressManager public AddressManager;
-    IFollowingSystem public FollowingSystem;
+    IFormattingSystem public FormattingSystem;
     IParametersManager public Parameters;
 
     // ------ Governance spotting on/off
@@ -382,11 +383,11 @@ contract DataSpotting is Ownable, RandomAllocator {
         RewardManager  = IRewardManager(addr);
     }
 
-    function updateFollowingSystem(address addr)
+    function updateFormattingSystem(address addr)
     public
     onlyOwner
     {
-        FollowingSystem = IFollowingSystem(addr);
+        FormattingSystem = IFormattingSystem(addr);
     }
 
     function updateAddressManager(address addr)
@@ -833,8 +834,8 @@ contract DataSpotting is Ownable, RandomAllocator {
             DataBatch[_DataBatchId].status = DataStatus.APPROVED;
             AcceptedBatchsCounter += 1;
 
-            // SEND THIS BATCH TO THIS FollowingSystem
-            try FollowingSystem.Ping(_DataBatchId){
+            // SEND THIS BATCH TO THIS FORMATTING SYSTEM
+            try FormattingSystem.Ping(_DataBatchId){
                 AllTxsCounter += 1;
             } catch(bytes memory err) {
                 emit BytesFailure(err);
@@ -1058,7 +1059,7 @@ contract DataSpotting is Ownable, RandomAllocator {
 
             // ---- TRIGGER UPDATES ON ALL SYSTEMS
             TriggerUpdate();            
-            try FollowingSystem.TriggerUpdate(){
+            try FormattingSystem.TriggerUpdate(){
             } catch(bytes memory err) {
                 emit BytesFailure(err);
             }

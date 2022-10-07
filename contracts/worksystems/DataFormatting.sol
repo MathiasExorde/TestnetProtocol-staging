@@ -131,8 +131,8 @@ interface IParametersManager {
     function get_FORMAT_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
     function get_FORMAT_COMMIT_ROUND_DURATION() external view returns(uint256);
     function get_FORMAT_REVEAL_ROUND_DURATION() external view returns(uint256);
-    function get_FORMAT_MIN_REWARD_Data() external view returns(uint256);
-    function get_FORMAT_MIN_REP_Data() external view returns(uint256);
+    function get_FORMAT_MIN_REWARD_DataValidation() external view returns(uint256);
+    function get_FORMAT_MIN_REP_DataValidation() external view returns(uint256);
 }
 
 interface IStakeManager {
@@ -167,6 +167,7 @@ interface ISpottingSystem {
         FLAGGED
     }
 
+    // ------ Data batch Structure
     struct BatchMetadata {
         uint256 start_idx;
         uint256 counter;
@@ -318,6 +319,7 @@ contract DataFormatting is Ownable, RandomAllocator {
     mapping(uint256 => mapping(address => string)) public UserNewFiles;     // maps DataID -> user addresses -> ipfs string -> counter
     mapping(uint256 => mapping(address => uint256)) public UserBatchCounts;     // maps DataID -> user addresses -> ipfs string -> counter
     mapping(uint256 => mapping(address => string)) public UserBatchFrom;     // maps DataID -> user addresses -> ipfs string -> counter
+    mapping(uint256 => mapping(address => string)) public UserSubmittedStatus;     // maps DataID -> user addresses -> ipfs string -> counter
 
     // ------ Backend Data Stores
     mapping(address => DLL2.FormattedData) dllMap;
@@ -336,6 +338,7 @@ contract DataFormatting is Ownable, RandomAllocator {
     address[] public availableWorkers;
     address[] public busyWorkers;   
     address[] public toUnregisterWorkers;   
+    uint256 LastRandomSeed = 0;
     
     // ------ Fuel Auto Top Up system
     address public sFuel;  // owner of sFuelDistributor needs to whitelist this contract
@@ -369,10 +372,14 @@ contract DataFormatting is Ownable, RandomAllocator {
     /**
     @dev Initializer. Can only be called once.
     */
-    constructor(address EXDT_token)  {        
-        token = IERC20(EXDT_token);
+    constructor(address EXDT_token_)  {   
+        require(address(EXDT_token_) != address(0));     
+        token = IERC20(EXDT_token_);
     }
     
+    function destroyContract() public onlyOwner {
+        selfdestruct(payable(owner()));
+    }
 
     function updateStakeManager(address addr)
     public
@@ -423,6 +430,21 @@ contract DataFormatting is Ownable, RandomAllocator {
         Parameters = IParametersManager(addr);
     }
 
+    function updateBatchCheckingCursor(uint256 BatchCheckingCursor_)
+    public
+    onlyOwner
+    {
+        BatchCheckingCursor = BatchCheckingCursor_;
+    }
+
+    function updateAllocatedBatchCursor(uint256 AllocatedBatchCursor_)
+    public
+    onlyOwner
+    {
+        AllocatedBatchCursor = AllocatedBatchCursor_;
+    }
+    
+
     // ----------------------------------------------------------------------------------
     //                          DATA DELETION FUNCTIONS
     // ----------------------------------------------------------------------------------
@@ -450,6 +472,7 @@ contract DataFormatting is Ownable, RandomAllocator {
         delete DataBatch[_BatchId];
     }
 
+    // This function is most likely not complete enough: need to delete from AttributeStore, need to clean some mappings, if possible.
     function deleteOldData() internal{
         uint256 BatchesToDeleteCount = BatchCheckingCursor - BatchDeletionCursor;
         if( BatchesToDeleteCount > Parameters.get_MAX_CONTRACT_STORED_BATCHES() ){                
@@ -478,13 +501,27 @@ contract DataFormatting is Ownable, RandomAllocator {
         sFuel  = _sFuel;
     }
 
-    function _retrieveSFuel() internal {
-        require(sFuel != address(0), "0 Address Not Valid");
-		(bool success1, /* bytes memory data1 */) = sFuel.call(abi.encodeWithSignature("retrieveSFuel(address)", payable(msg.sender)));
-        (bool success2, /* bytes memory data2 */) = sFuel.call(abi.encodeWithSignature("retrieveSFuel(address payable)", payable(msg.sender)));
-        require(( success1 || success2 ), "receiver rejected _retrieveSFuel call");
+    // function _retrieveSFuel() internal {
+    //     require(sFuel != address(0), "0 Address Not Valid");
+	// 	(bool success1, /* bytes memory data1 */) = sFuel.call(abi.encodeWithSignature("retrieveSFuel(address)", payable(msg.sender)));
+    //     (bool success2, /* bytes memory data2 */) = sFuel.call(abi.encodeWithSignature("retrieveSFuel(address payable)", payable(msg.sender)));
+    //     require(( success1 || success2 ), "receiver rejected _retrieveSFuel call");
 
+    // }
+
+    function _retrieveSFuel() internal {
+        address sFuelAddress;
+        try Parameters.getsFuelSystem(){
+        } catch(bytes memory err) {
+            emit BytesFailure(err);
+        }
+        sFuelAddress = Parameters.getsFuelSystem();
+        require(sFuelAddress != address(0), "sFuel: null Address Not Valid");
+		(bool success1, /* bytes memory data1 */) = sFuelAddress.call(abi.encodeWithSignature("retrieveSFuel(address)", payable(msg.sender)));
+        (bool success2, /* bytes memory data2 */) = sFuelAddress.call(abi.encodeWithSignature("retrieveSFuel(address payable)", payable(msg.sender)));
+        require(( success1 || success2 ), "receiver rejected _retrieveSFuel call");
     }
+
 
     modifier topUpSFuel {
             _retrieveSFuel();
@@ -572,7 +609,6 @@ contract DataFormatting is Ownable, RandomAllocator {
         WorkerState storage worker_state = WorkersState[msg.sender];
         require((availableWorkers.length+busyWorkers.length) < Parameters.getMaxTotalWorkers(), "Maximum registered workers already");
         require(worker_state.registered == false, "Worker is already registered");
-        
         // require worker to NOT have NOT VOTED MAX_SUCCEEDING_NOVOTES times in a row. If so, he has to wait NOVOTE_REGISTRATION_WAIT_DURATION
         require(    !( // NOT
                     worker_state.succeeding_novote_count >= Parameters.get_MAX_SUCCEEDING_NOVOTES() 
@@ -583,7 +619,6 @@ contract DataFormatting is Ownable, RandomAllocator {
 
         //_numTokens The number of tokens to be committed towards the target FormattedData
         uint256 _numTokens = Parameters.get_FORMAT_MIN_STAKE();
-        
         // Master/SubWorker Stake Management
         address _senderMaster = AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
         if (FormatStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
@@ -599,7 +634,6 @@ contract DataFormatting is Ownable, RandomAllocator {
                 requestAllocatedStake(remainder, msg.sender);
             }
         }
-
         // make sure msg.sender has enough voting rights
         require(FormatStakedTokenBalance[msg.sender] >= _numTokens, "Worker has not enough (_numTokens) in his FormatStakedTokenBalance ");
         //////////////////////////////////
@@ -616,16 +650,15 @@ contract DataFormatting is Ownable, RandomAllocator {
         emit _WorkerRegistered(msg.sender, block.timestamp);
     }
 
-    /////////////////////////////////////////////////////////////////////
     /* Unregister worker (offline) */
-    function UnregisterWorker() public topUpSFuel {
+    function UnregisterWorker() public {
         WorkerState storage worker_state = WorkersState[msg.sender];
         require(worker_state.registered == true, "Worker is not registered so can't unregister");
         if( worker_state.allocated_work_batch != 0 && worker_state.unregistration_request == false ){
             worker_state.unregistration_request = true;
+            toUnregisterWorkers.push(msg.sender);
         }
-        else{
-            require(worker_state.allocated_work_batch == 0, "Worker currently has work allocated, can't be unregistered");
+        else if( worker_state.allocated_work_batch == 0){   // only unregister a worker if he is not working             
             //////////////////////////////////
             PopFromAvailableWorkers(msg.sender);
             PopFromBusyWorkers(msg.sender);
@@ -634,20 +667,25 @@ contract DataFormatting is Ownable, RandomAllocator {
             worker_state.registered = false;
             emit _WorkerUnregistered(msg.sender, block.timestamp);
         }
+
         AllTxsCounter += 1;
+        _retrieveSFuel();
     }
 
     function processLogoffRequests() internal{
         for (uint256 i = 0; i < toUnregisterWorkers.length; i++) {
             address worker_addr_ = toUnregisterWorkers[i];
             WorkerState storage worker_state = WorkersState[worker_addr_];
-            worker_state.registered = false;
-            worker_state.unregistration_request = false;
-            PopFromAvailableWorkers(worker_addr_);
-            PopFromBusyWorkers(worker_addr_);
+            if (worker_state.registered &&  worker_state.allocated_work_batch == 0 ){
+                worker_state.registered = false;
+                worker_state.unregistration_request = false;
+                PopFromAvailableWorkers(worker_addr_);
+                PopFromBusyWorkers(worker_addr_);
+            }
         }
         delete toUnregisterWorkers;
     }
+
     
     // ----------------------------------------------------------------------------------
     //                          LINK PREVIOUS DATA SPOTTING SYSTEM AS INPUT
@@ -719,7 +757,8 @@ contract DataFormatting is Ownable, RandomAllocator {
             }
             // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
             if( DataBatch[AllocatedBatchCursor].allocated_to_work != true  
-                && availableWorkers.length >= Parameters.get_FORMAT_MIN_CONSENSUS_WORKER_COUNT()
+                && availableWorkers.length >= Parameters.get_FORMAT_MIN_CONSENSUS_WORKER_COUNT()                
+                && LastRandomSeed !=  getRandom() // make sure randomness is refreshed
                 && DataBatch[AllocatedBatchCursor].complete  ){ //nothing to allocate, waiting for this to end
                 AllocateWork();
                 progress = true;
@@ -825,8 +864,8 @@ contract DataFormatting is Ownable, RandomAllocator {
                 string memory worker_proposed_hash = UserNewFiles[_DataBatchId][worker_addr_];                
                 if( AreStringsEqual(worker_proposed_hash, majorityNewFile) ){ 
                     address worker_master_addr_ = AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
-                    require(RepManager.mintReputationForWork(Parameters.get_FORMAT_MIN_REP_Data(), worker_master_addr_, ""), "could not reward REP in ValidateDataBatch, 1.a");
-                    require(RewardManager.ProxyAddReward(Parameters.get_FORMAT_MIN_REWARD_Data(), worker_master_addr_), "could not reward token in ValidateDataBatch, 1.b");       
+                    require(RepManager.mintReputationForWork(Parameters.get_FORMAT_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in ValidateDataBatch, 1.a");
+                    require(RewardManager.ProxyAddReward(Parameters.get_FORMAT_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in ValidateDataBatch, 1.b");       
                     worker_state.majority_counter += 1;        
                 }
                 else{                    
@@ -929,7 +968,8 @@ contract DataFormatting is Ownable, RandomAllocator {
             worker_state.has_completed_work = false;
             emit _WorkAllocated(AllocatedBatchCursor, selected_worker_);
         }
-        AllocatedBatchCursor = AllocatedBatchCursor.add(1);
+        AllocatedBatchCursor = AllocatedBatchCursor.add(1);        
+        LastRandomSeed = getRandom();
         AllTxsCounter += 1;
     }
 
@@ -966,7 +1006,7 @@ contract DataFormatting is Ownable, RandomAllocator {
     @param _secretIPFSHash FormatCheck HASH encrypted
     // @ _prevDataID The ID of the FormattedData that the user has voted the maximum number of tokens in which is still less than or equal to numTokens
     */
-    function commitFormatCheck(uint256 _DataBatchId, bytes32  _secretIPFSHash, uint256 _BatchCount, string memory _From) public topUpSFuel {
+    function commitFormatCheck(uint256 _DataBatchId, bytes32  _secretIPFSHash, uint256 _BatchCount, string memory _From, string memory _Status) public topUpSFuel {
         require(commitPeriodActive(_DataBatchId), "commit period needs to be open");        
         require(!UserChecksCommits[msg.sender][_DataBatchId], "User has already commited to this batchId");
         require(isWorkerAllocatedToBatch(_DataBatchId, msg.sender), "User needs to be allocated to this batch to commit on it");
@@ -1014,6 +1054,7 @@ contract DataFormatting is Ownable, RandomAllocator {
         store.setAttribute(UUID, "commitHash", uint256(_secretIPFSHash));
         UserBatchCounts[_DataBatchId][msg.sender] = _BatchCount;
         UserBatchFrom[_DataBatchId][msg.sender] = _From;
+        UserSubmittedStatus[_DataBatchId][msg.sender] = _Status;
 
         // WORKER STATE UPDATE
         WorkerState storage worker_state = WorkersState[msg.sender];
@@ -1162,7 +1203,7 @@ contract DataFormatting is Ownable, RandomAllocator {
         BatchMetadata memory batch_ = DataBatch[_DataBatchId];
         uint256 batch_size = batch_.counter;
 
-        string[] memory ipfs_hash_list = new string[](Parameters.get_FORMAT_DATA_BATCH_SIZE());
+        string[] memory ipfs_hash_list = new string[](batch_size);
 
         for(uint256 i=0; i < batch_size; i++){
             uint256 k = batch_.start_idx + i;
@@ -1173,6 +1214,66 @@ contract DataFormatting is Ownable, RandomAllocator {
         return ipfs_hash_list;
     }
 
+    function getStatusForBatch(uint256 _DataBatchId) public view returns (string[] memory)  {
+        require(DataExists(_DataBatchId), "_DataBatchId must exist");
+        
+        address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
+        string[] memory status_list = new string[](allocated_workers_.length);
+
+        for(uint256 i=0; i < allocated_workers_.length; i++){
+            status_list[i] = UserSubmittedStatus[_DataBatchId][allocated_workers_[i]];
+        }
+        return status_list;
+    }
+
+    function getFromsForBatch(uint256 _DataBatchId) public view returns (string[] memory)  {
+        require(DataExists(_DataBatchId), "_DataBatchId must exist");
+        
+        address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
+        string[] memory from_list = new string[](allocated_workers_.length);
+
+        for(uint256 i=0; i < allocated_workers_.length; i++){
+            from_list[i] = UserBatchFrom[_DataBatchId][allocated_workers_[i]];
+        }
+        return from_list;
+    }
+
+    function getVotesForBatch(uint256 _DataBatchId) public view returns (uint256[] memory)  {
+        require(DataExists(_DataBatchId), "_DataBatchId must exist");
+        
+        address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
+        uint256[] memory votes_list = new uint256[](allocated_workers_.length);
+
+        for(uint256 i=0; i < allocated_workers_.length; i++){
+            votes_list[i] = UserVotes[_DataBatchId][allocated_workers_[i]];
+        }
+        return votes_list;
+    }
+
+    function getSubmittedFilesForBatch(uint256 _DataBatchId) public view returns (string[] memory)  {
+        require(DataExists(_DataBatchId), "_DataBatchId must exist");
+        
+        address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
+        string[] memory files_list = new string[](allocated_workers_.length);
+
+        for(uint256 i=0; i < allocated_workers_.length; i++){
+            files_list[i] = UserNewFiles[_DataBatchId][allocated_workers_[i]];
+        }
+        return files_list;
+    }
+
+    
+    function getActiveWorkersCount() public view returns (uint256 numWorkers) {
+        return(uint256(availableWorkers.length+busyWorkers.length));
+    }
+    
+    function getAvailableWorkersCount() public view returns (uint256 numWorkers) {
+        return(uint256(availableWorkers.length));
+    }
+
+    function getBusyWorkersCount() public view returns (uint256 numWorkers) {
+        return(uint256(busyWorkers.length));
+    }
 
     // --------------------------------------------------------------------------------------------------------------------------------------------------------
     // --------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1180,10 +1281,6 @@ contract DataFormatting is Ownable, RandomAllocator {
     // --------------------------------------------------------------------------------------------------------------------------------------------------------
     // --------------------------------------------------------------------------------------------------------------------------------------------------------
     
-    function getActiveWorkersCount() public view returns (uint256 numWorkers) {
-        return(uint256(availableWorkers.length+busyWorkers.length));
-    }
-
 
     /**
     @dev Compares previous and next FormattedData's committed tokens for sorting purposes
@@ -1393,7 +1490,7 @@ contract DataFormatting is Ownable, RandomAllocator {
     @return batch of the last Dataed a user started
     */
     function getBatchByID(uint256 _DataBatchId) public view returns (BatchMetadata memory batch) {
-        require(DataExists(_DataBatchId));
+        require(DataExists(_DataBatchId), "_DataBatchId must exist");
         return  DataBatch[_DataBatchId];
     }
 
@@ -1402,11 +1499,39 @@ contract DataFormatting is Ownable, RandomAllocator {
     @return batch of the last Dataed a user started
     */
     function getBatchIPFSFileByID(uint256 _DataBatchId) public view returns (string memory batch) {
-        require(DataExists(_DataBatchId));
+        require(DataExists(_DataBatchId), "_DataBatchId must exist");
         return  DataBatch[_DataBatchId].batchIPFSfile;
     }
-
     
+
+    // return only accepted batches 
+    function getAcceptedBatchFilesRange(uint256 _DataBatchId_start, uint256 _DataBatchId_end) public view returns (string[] memory batch) {
+        require(_DataBatchId_start< _DataBatchId_end, "_DataBatchId_start must be < than _DataBatchId_end");
+        require(DataExists(_DataBatchId_end), "_DataBatchId_end must exist: the input range is not correct");
+        uint256 list_size = _DataBatchId_end -_DataBatchId_start + 1;
+        string[] memory file_list = new string[](list_size);        
+        for(uint256 i=_DataBatchId_start; i < _DataBatchId_end; i++){
+            if( DataBatch[i].status == DataStatus.APPROVED ){
+                file_list[i] = DataBatch[i].batchIPFSfile;
+            }
+        }
+        return file_list;
+    }
+
+    // return only accepted batches 
+    function getAcceptedBatchFileFrom(uint256 _DataBatchId_start) public view returns (string[] memory batch) {
+        require(DataExists(_DataBatchId_start), "_DataBatchId_start must exist");
+        uint256 list_size = BatchCheckingCursor -_DataBatchId_start + 1;
+        string[] memory file_list = new string[](list_size);        
+        for(uint256 i=_DataBatchId_start; i< BatchCheckingCursor; i++){
+            if( DataBatch[i].status == DataStatus.APPROVED ){
+                file_list[i] = DataBatch[i].batchIPFSfile;
+            }
+        }
+        return file_list;
+    }
+
+
     /**
     @notice getLastBachDataId
     @return data of the last Dataed a user started

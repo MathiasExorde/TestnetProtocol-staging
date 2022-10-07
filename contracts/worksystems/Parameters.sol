@@ -55,9 +55,7 @@ contract Parameters is Ownable {
     address public RewardManager;
     address public AddressManager;
     address public SpottingSystem;
-    address public ComplianceSystem;
-    address public IndexingSystem;
-    address public ArchivingSystem;
+    address public FormattingSystem;
     address public sFuel = 0xc0292e785951B29610D1CC3b32a2C23258622995;
 
     
@@ -75,7 +73,7 @@ contract Parameters is Ownable {
 //     function getRepManager() external view returns(address);
 //     function getRewardManager() external view returns(address);
 //     function getSpottingSystem() external view returns(address);
-//     function getComplianceSystem() external view returns(address);
+//     function getFormattingSystem() external view returns(address);
 //     function getsFuelSystem() external view returns(address);
 //     function getExordeToken() external view returns(address);
 //     // -------------- GETTERS : SPOTTING --------------------
@@ -123,7 +121,7 @@ contract Parameters is Ownable {
 
 
     function updateContractsAddresses(address StakeManager_, address RepManager_, address RewardManager_, address AddressManager_,
-                                      address SpottingSystem_, address ComplianceSystem_, address sFuel_, address token_) public  onlyOwner {
+                                      address SpottingSystem_, address FormattingSystem_, address sFuel_, address token_) public  onlyOwner {
         if(StakeManager_ != address(0)){
             StakeManager = StakeManager_;
         }
@@ -139,8 +137,8 @@ contract Parameters is Ownable {
         if(SpottingSystem_ != address(0)){
             SpottingSystem = SpottingSystem_;
         }
-        if(ComplianceSystem_ != address(0)){
-            ComplianceSystem = ComplianceSystem_;
+        if(FormattingSystem_ != address(0)){
+            FormattingSystem = FormattingSystem_;
         }
         if(sFuel_ != address(0)){
             sFuel = sFuel_;
@@ -266,8 +264,8 @@ contract Parameters is Ownable {
     function getSpottingSystem() public view returns(address){
         return SpottingSystem;
     }
-    function getComplianceSystem() public view returns(address){
-        return ComplianceSystem;
+    function getFormattingSystem() public view returns(address){
+        return FormattingSystem;
     }
     function getsFuelSystem() public view returns(address){
         return sFuel;
