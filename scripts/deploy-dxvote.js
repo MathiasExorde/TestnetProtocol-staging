@@ -58,15 +58,10 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     // --------------------------------
     const AttributeStore = artifacts.require('AttributeStore.sol');
     const AttributeStore2 = artifacts.require('AttributeStore2.sol');
-    const AttributeStore3 = artifacts.require('AttributeStore3.sol');
-    const AttributeStore4 = artifacts.require('AttributeStore4.sol');
     const DLL = artifacts.require('DLL.sol');
     const DLL2 = artifacts.require('DLL2.sol');
-    const DLL3 = artifacts.require('DLL3.sol');
-    const DLL4 = artifacts.require('DLL4.sol');
     const DataSpotting = await hre.artifacts.require("DataSpotting");
-    const DataCompliance = await hre.artifacts.require("DataCompliance");
-    const DataIndexing = await hre.artifacts.require("DataIndexing");
+    const DataFormatting = await hre.artifacts.require("DataFormatting");
     const DataArchive = await hre.artifacts.require("DataArchive");
     // ---------------------------------
     const DXDVotingMachine = await hre.artifacts.require("DXDVotingMachine");
@@ -140,15 +135,10 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     let ParametersAddress;
 
   // -------------------------------
-    let IMPORT_DEPLOYED_BASE = false;
+    let IMPORT_DEPLOYED_BASE = true;
     let IMPORT_DEPLOYED_CORE = false;
     let IMPORT_DEPLOYED_WS = false;
   // -------------------------------
-  // WORK SYSTEM DEPLOYED ADDRESSES (if not deployed_ws):
-    let _dataspot_addr = ""
-    let _dataformat_addr = ""
-    let _dataindex_addr = ""
-    let _dataarch_addr = ""
   
     if(IMPORT_DEPLOYED_CORE){        
       console.log("------------------- Deploying with predeployed contracts");
@@ -210,10 +200,11 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
       // STake & Rewards
       StakingManagerAddress = "0xbfAACccE5AedC0DC32bE45aC4223A59D1eb7f8A7";
       RewardsManagerAddress = "0x8D456f337f1C4af6D1D0E343bD21D9e66F19b64C";
+      // sFuel Auto top up system
+      SFuelContractsAddress = "0xc0292e785951B29610D1CC3b32a2C23258622995";
+      
     }
-
-    // sFuel Auto top up system
-    SFuelContractsAddress = "0xc0292e785951B29610D1CC3b32a2C23258622995";      
+    
 
   
     // Deploy Multicall
@@ -437,16 +428,17 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     await rewards_manager.updateAddressManager(address_manager.address);
 
 
-    // -------------------------------------------------------------------------------------------------------
-    ////////////////////////////////////////      SPOTTING WORK SYSTEM     //////////////////////////////////////////
     // Deploy WorkSystems
     let spot_worksystem;
     // lib_AttributeStore = await ethers.getContractFactory("lib_AttributeStore");
+      
     let libAttributeStore;
     let libDLL;
+    ////////////////////////////////////////      SPOTTING WORK SYSTEM     //////////////////////////////////////////
 
 
     if(IMPORT_DEPLOYED_WS){   
+      let _dataspot_addr = "0xf7b2f1fB641151e8369a0d91E6B634B6527F18BD";
       console.log("IMPORTING EXISTING DataSpotting at ", _dataspot_addr);
       spot_worksystem = await hre.ethers.getContractAt("DataSpotting", _dataspot_addr);
       addresses["DataSpotting"] = spot_worksystem.address;
@@ -483,9 +475,8 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
 
     
     // -------------------------------------------------------------------------------------------------------
-    ////////////////////////////////////////      COMPLIANCE WORK SYSTEM     //////////////////////////////////////////
 
-    let compliance_worksystem;
+    let format_worksystem;
     let libAttributeStore2;
     let libDLL2;
 
@@ -494,140 +485,47 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     libDLL2 = await DLL2.new();
     console.log("Library DLL2 addr",libDLL2.address);
 
-    console.log("Deploying DataCompliance System...");
+    console.log("Deploying DataFormatting System...");
+    ////////////////////////////////////////      FORMATTING WORK SYSTEM     //////////////////////////////////////////
 
     
     if(IMPORT_DEPLOYED_WS){   
-      console.log("IMPORTING EXISTING DataCompliance at ", _dataformat_addr);
-      compliance_worksystem = await hre.ethers.getContractAt("DataCompliance", _dataformat_addr);
-      addresses["DataCompliance"] = compliance_worksystem.address;
-      console.log("Exorde DataCompliance deployed to:", compliance_worksystem.address);
+      let _dataformat_addr = "0x2a6b5715bB02934fCe0e1FA41976F59f334B3c6E";
+      console.log("IMPORTING EXISTING DataFormatting at ", _dataformat_addr);
+      format_worksystem = await hre.ethers.getContractAt("DataFormatting", _dataformat_addr);
+      addresses["DataFormatting"] = format_worksystem.address;
+      console.log("Exorde DataFormatting deployed to:", format_worksystem.address);
     }
     else{        
-      const DataComplianceFactory = await ethers.getContractFactory("DataCompliance", {
+      const DataFormattingFactory = await ethers.getContractFactory("DataFormatting", {
         libraries: { 
           AttributeStore2: libAttributeStore2.address,
           DLL2: libDLL2.address           
         },
       });
 
-      const _DataComplianceFactory = await DataComplianceFactory.deploy(tokens.EXDT.address);
-      await _DataComplianceFactory.deployed();
+      const _DataFormattingFactory = await DataFormattingFactory.deploy(tokens.EXDT.address);
+      await _DataFormattingFactory.deployed();
 
 
-      console.log("DataCompliance deployed to ", _DataComplianceFactory.address);
-      compliance_worksystem = _DataComplianceFactory;
-      addresses["DataCompliance"] = _DataComplianceFactory.address;
+      console.log("DataFormatting deployed to ", _DataFormattingFactory.address);
+      format_worksystem = _DataFormattingFactory;
+      addresses["DataFormatting"] = _DataFormattingFactory.address;
 
     }
 
     // register the worksystem as allowed to use stakes
-    console.log("Add the DataCompliance as allowed to use stakes in StakingManager");
-    await staking_manager.addAddress(compliance_worksystem.address);    
-    console.log("Add the DataCompliance as allowed to use stakes in RewardsManager");
-    await rewards_manager.addAddress(compliance_worksystem.address);
-
-    
-    // -------------------------------------------------------------------------------------------------------
-    ////////////////////////////////////////      INDEXING WORK SYSTEM     //////////////////////////////////////////
-
-    let indexing_worksystem;
-    let libAttributeStore3;
-    let libDLL3;
-
-    libAttributeStore3 = await AttributeStore3.new();
-    console.log("Library AttributeStore3 addr",libAttributeStore3.address);
-    libDLL3 = await DLL3.new();
-    console.log("Library DLL3 addr",libDLL3.address);
-
-    console.log("Deploying DataIndexing System...");
-
-    
-    if(IMPORT_DEPLOYED_WS){   
-      console.log("IMPORTING EXISTING DataIndexing at ", _dataindexing_addr);
-      indexing_worksystem = await hre.ethers.getContractAt("DataIndexing", _dataindexing_addr);
-      addresses["DataIndexing"] = indexing_worksystem.address;
-      console.log("Exorde DataIndexing deployed to:", indexing_worksystem.address);
-    }
-    else{        
-      const DataIndexingFactory = await ethers.getContractFactory("DataIndexing", {
-        libraries: { 
-          AttributeStore3: libAttributeStore3.address,
-          DLL3: libDLL3.address           
-        },
-      });
-
-      const _DataIndexingFactory = await DataIndexingFactory.deploy(tokens.EXDT.address);
-      await _DataIndexingFactory.deployed();
-
-
-      console.log("DataIndexing deployed to ", _DataIndexingFactory.address);
-      indexing_worksystem = _DataIndexingFactory;
-      addresses["DataIndexing"] = _DataIndexingFactory.address;
-    }
-
-
-    // register the worksystem as allowed to use stakes
-    console.log("Add the DataIndexing as allowed to use stakes in StakingManager");
-    await staking_manager.addAddress(indexing_worksystem.address);    
-    console.log("Add the DataIndexing as allowed to use stakes in RewardsManager");
-    await rewards_manager.addAddress(indexing_worksystem.address);
-
-
-    // -------------------------------------------------------------------------------------------------------
-    ////////////////////////////////////////      ARCHIVING WORK SYSTEM     //////////////////////////////////////////
-    let archiving_worksystem;
-    let libAttributeStore4;
-    let libDLL4;
-
-    libAttributeStore4 = await AttributeStore4.new();
-    console.log("Library AttributeStore4 addr",libAttributeStore4.address);
-    libDLL4 = await DLL4.new();
-    console.log("Library DLL4 addr",libDLL4.address);
-
-    console.log("Deploying DataArchiving System...");
-
-    
-    if(IMPORT_DEPLOYED_WS){   
-      console.log("IMPORTING EXISTING DataArchiving at ", _DataArchiving_addr);
-      archiving_worksystem = await hre.ethers.getContractAt("DataArchiving", _DataArchiving_addr);
-      addresses["DataArchiving"] = archiving_worksystem.address;
-      console.log("Exorde DataArchiving deployed to:", archiving_worksystem.address);
-    }
-    else{        
-      const DataArchivingFactory = await ethers.getContractFactory("DataArchiving", {
-        libraries: { 
-          AttributeStore4: libAttributeStore4.address,
-          DLL4: libDLL4.address           
-        },
-      });
-
-      const _DataArchivingFactory = await DataArchivingFactory.deploy(tokens.EXDT.address);
-      await _DataArchivingFactory.deployed();
-
-
-      console.log("DataArchiving deployed to ", _DataArchivingFactory.address);
-      archiving_worksystem = _DataArchivingFactory;
-      addresses["DataArchiving"] = _DataArchivingFactory.address;
-    }
-
-
-    // register the worksystem as allowed to use stakes
-    console.log("Add the DataArchiving as allowed to use stakes in StakingManager");
-    await staking_manager.addAddress(archiving_worksystem.address);    
-    console.log("Add the DataArchiving as allowed to use stakes in RewardsManager");
-    await rewards_manager.addAddress(archiving_worksystem.address);
-
-    // -------------------------------------------------------------------------------------------------------
-    // -------------------------------------------------------------------------------------------------------
-    // -------------------------------------------------------------------------------------------------------
+    console.log("Add the DataFormatting as allowed to use stakes in StakingManager");
+    await staking_manager.addAddress(format_worksystem.address);    
+    console.log("Add the DataFormatting as allowed to use stakes in RewardsManager");
+    await rewards_manager.addAddress(format_worksystem.address);
 
     await waitBlocks(1);
     ///////////// WORKSYSTEM BI DIRECTIONAL LINKING /////////////
-    console.log("[PIPELINE LINK] Add the DataSpotting to be referenced in the DataCompliance contract")
-    await compliance_worksystem.updatePreviousSystem(addresses["DataSpotting"]);
-    console.log("[PIPELINE LINK] Add the DataCompliance to be referenced in the DataSpotting contract")
-    await spot_worksystem.updateFollowingSystem(addresses["DataCompliance"])
+    console.log("[PIPELINE LINK] Add the DataSpotting to be referenced in the DataFormatting contract")
+    await format_worksystem.updateSpotManager(addresses["DataSpotting"]);
+    console.log("[PIPELINE LINK] Add the DataFormatting to be referenced in the DataSpotting contract")
+    await spot_worksystem.updateFormattingSystem(addresses["DataFormatting"])
     // -------------------------------------------------------------------------------------------------------
 
     await waitBlocks(1);
@@ -642,17 +540,17 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     }
     else{    
       console.log("Deploying DataArchive...");
-      data_archive = await DataArchive.new(addresses["EXDT"], addresses["DataCompliance"]);
+      data_archive = await DataArchive.new(addresses["EXDT"], addresses["DataFormatting"]);
       addresses["DataArchive"] = data_archive.address;
       console.log("Data Archive deployed to ", data_archive.address);
     }
 
 
     ///////////// WORKSYSTEM BI DIRECTIONAL LINKING /////////////
-    console.log("[PIPELINE LINK] Add the DataCompliance to be referenced in the DataArchive contract")
-    await data_archive.updatePreviousSystem(addresses["DataCompliance"]);
-    console.log("[PIPELINE LINK] Add the DataArchive to be referenced in the DataCompliance contract")
-    await compliance_worksystem.updateArchiveManager(addresses["DataArchive"])
+    console.log("[PIPELINE LINK] Add the DataFormatting to be referenced in the DataArchive contract")
+    await data_archive.updatePreviousSystem(addresses["DataFormatting"]);
+    console.log("[PIPELINE LINK] Add the DataArchive to be referenced in the DataFormatting contract")
+    await format_worksystem.updateArchiveManager(addresses["DataArchive"])
     // console.log("Add the DataArchive as allowed to use stakes in StakingManager");
     // await staking_manager.addAddress(data_archive.address);    
     // console.log("Add the DataArchive as allowed to use stakes in RewardsManager");
@@ -666,12 +564,12 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     sfuelcontract = await hre.ethers.getContractAt("SFuelContracts", SFuelContractsAddress);
     console.log("Allow worksystems to topup sFuel");
     await sfuelcontract.addAddress(addresses["DataSpotting"])
-    await sfuelcontract.addAddress(addresses["DataCompliance"])
+    await sfuelcontract.addAddress(addresses["DataFormatting"])
 
     console.log("ADD PARAMETERS TO PARAMETERS MANAGER");
     if(networkName.startsWith('schain')){
       await parameters_manager.updateContractsAddresses(staking_manager.address, reputation.address, rewards_manager.address, address_manager.address,
-        addresses["DataSpotting"], addresses["DataCompliance"], sfuelcontract.address, tokens.EXDT.address)
+        addresses["DataSpotting"], addresses["DataFormatting"], sfuelcontract.address, tokens.EXDT.address)
     }
 
     await waitBlocks(1);
@@ -1035,8 +933,8 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     // --------------------- MASTER WALLET REPUTATION FOR WORKSYSTEMS
     console.log("\n\nAdd the DataSpotting as allowed to mint Reputation in MasterWallet");
     await masterWallet.addWorksystemAddress(spot_worksystem.address);
-    console.log("Add the DataCompliance as allowed to mint Reputation in MasterWallet\n");
-    await masterWallet.addWorksystemAddress(compliance_worksystem.address);
+    console.log("Add the DataFormatting as allowed to mint Reputation in MasterWallet\n");
+    await masterWallet.addWorksystemAddress(format_worksystem.address);
 
     await waitBlocks(1);
     console.log("\n\nAdd the AddressManager as allowed to mint Reputation in MasterWallet");
@@ -1053,12 +951,12 @@ task("deploy-dxvote", "Deploy dxvote in localhost network")
     await spot_worksystem.updateRepManager(masterWallet.address);
     await spot_worksystem.updateAddressManager(address_manager.address);
     await spot_worksystem.updateParametersManager(parameters_manager.address);
-    console.log("Update Stake/Rewards & Reputation Managers in the DataCompliance contract\n");    
-    await compliance_worksystem.updateStakeManager(staking_manager.address);    
-    await compliance_worksystem.updateRewardManager(rewards_manager.address);    
-    await compliance_worksystem.updateRepManager(masterWallet.address);
-    await compliance_worksystem.updateAddressManager(address_manager.address);    
-    await compliance_worksystem.updateParametersManager(parameters_manager.address);
+    console.log("Update Stake/Rewards & Reputation Managers in the DataFormatting contract\n");    
+    await format_worksystem.updateStakeManager(staking_manager.address);    
+    await format_worksystem.updateRewardManager(rewards_manager.address);    
+    await format_worksystem.updateRepManager(masterWallet.address);
+    await format_worksystem.updateAddressManager(address_manager.address);    
+    await format_worksystem.updateParametersManager(parameters_manager.address);
     console.log("Update Stake/Rewards/Rep & Reputation Managers in the AddressManager contract\n");    
     await address_manager.updateRewardManager(rewards_manager.address);    
     await address_manager.updateRepManager(masterWallet.address);
