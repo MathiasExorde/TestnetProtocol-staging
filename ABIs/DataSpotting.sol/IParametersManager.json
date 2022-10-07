@@ -5,7 +5,7 @@
   "abi": [
     {
       "inputs": [],
-      "name": "getComplianceSystem",
+      "name": "getExordeToken",
       "outputs": [
         {
           "internalType": "address",
@@ -18,7 +18,7 @@
     },
     {
       "inputs": [],
-      "name": "getExordeToken",
+      "name": "getFormattingSystem",
       "outputs": [
         {
           "internalType": "address",
@@ -58,6 +58,19 @@
     {
       "inputs": [],
       "name": "getRewardManager",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getSpottingSystem",
       "outputs": [
         {
           "internalType": "address",

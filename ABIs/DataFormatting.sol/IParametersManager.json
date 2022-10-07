@@ -161,7 +161,7 @@
     },
     {
       "inputs": [],
-      "name": "get_FORMAT_MIN_REP_Data",
+      "name": "get_FORMAT_MIN_REP_DataValidation",
       "outputs": [
         {
           "internalType": "uint256",
@@ -174,7 +174,7 @@
     },
     {
       "inputs": [],
-      "name": "get_FORMAT_MIN_REWARD_Data",
+      "name": "get_FORMAT_MIN_REWARD_DataValidation",
       "outputs": [
         {
           "internalType": "uint256",
