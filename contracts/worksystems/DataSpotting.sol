@@ -119,9 +119,12 @@ interface IParametersManager {
     // -------------- GETTERS : ADDRESSES --------------------    
     function getStakeManager() external view returns(address);
     function getRepManager() external view returns(address);
+    function getAddressManager() external view returns(address);
     function getRewardManager() external view returns(address);
+    function getArchivingSystem() external view returns(address);
     function getSpottingSystem() external view returns(address);
-    function getFormattingSystem() external view returns(address);
+    function getComplianceSystem() external view returns(address);
+    function getIndexingSystem() external view returns(address);
     function getsFuelSystem() external view returns(address);
     function getExordeToken() external view returns(address);
     // -------------- GETTERS : SPOTTING --------------------
@@ -166,7 +169,7 @@ interface IAddressManager {
     function FetchHighestMaster(address _worker) external view returns (address);
 }
 
-interface IFormattingSystem {
+interface IFollowingSystem {
     function Ping(uint256 CheckedBatchId) external;        
     function TriggerUpdate() external;    
 }
@@ -312,7 +315,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     // ------ Worker & Stake related structure
     mapping(address => WorkerState) public WorkersState;
     mapping(address => TimeframeCounter[NB_TIMEFRAMES] ) public WorkersSpotFlowManager;
-    mapping(address => uint256) public SpotStakedTokenBalance; // maps user's address to voteToken balance
+    mapping(address => uint256) public SystemStakedTokenBalance; // maps user's address to voteToken balance
 
     // ------ Worker management structures
     mapping(address => address[]) public MasterWorkers;
@@ -339,11 +342,6 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     // ------ Addresses & Interfaces
     IERC20 public token;
-    IStakeManager public StakeManager;
-    IRepManager public RepManager;
-    IRewardManager public RewardManager;
-    IAddressManager public AddressManager;
-    IFormattingSystem public FormattingSystem;
     IParametersManager public Parameters;
 
     // ------ Governance spotting on/off
@@ -360,41 +358,6 @@ contract DataSpotting is Ownable, RandomAllocator {
     
     function destroyContract() public onlyOwner {
         selfdestruct(payable(owner()));
-    }
-
-    function updateStakeManager(address addr)
-    public
-    onlyOwner
-    {
-        StakeManager = IStakeManager(addr);
-    }
-    
-    function updateRepManager(address addr)
-    public
-    onlyOwner
-    {
-        RepManager  = IRepManager(addr);
-    }
-    
-    function updateRewardManager(address addr)
-    public
-    onlyOwner
-    {
-        RewardManager  = IRewardManager(addr);
-    }
-
-    function updateFormattingSystem(address addr)
-    public
-    onlyOwner
-    {
-        FormattingSystem = IFormattingSystem(addr);
-    }
-
-    function updateAddressManager(address addr)
-    public
-    onlyOwner
-    {
-        AddressManager  = IAddressManager(addr);
     }
 
     function updateParametersManager(address addr)
@@ -514,8 +477,10 @@ contract DataSpotting is Ownable, RandomAllocator {
 
 
     function SelectAddressForUser(address _worker) public view returns(address){
+        require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
         address selected_addr;
-        address _senderMaster = AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
+        IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());
+        address _senderMaster = _AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
         if (_senderMaster != address(0)){
             selected_addr = _senderMaster;
         }
@@ -549,13 +514,13 @@ contract DataSpotting is Ownable, RandomAllocator {
         uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
         address _selectedAddress = SelectAddressForUser(msg.sender);
         // if tx sender has a master, then interact with his master's stake, or himself
-        if (SpotStakedTokenBalance[_selectedAddress] < _numTokens){
-            uint256 remainder = _numTokens.sub(SpotStakedTokenBalance[_selectedAddress]);
+        if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
+            uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
             requestAllocatedStake(remainder, _selectedAddress);
         }
         
         // make sure msg.sender has enough voting rights
-        require(SpotStakedTokenBalance[msg.sender] >= _numTokens, "Worker has not enough (_numTokens) in his SpotStakedTokenBalance ");
+        require(SystemStakedTokenBalance[msg.sender] >= _numTokens, "Worker has not enough (_numTokens) in his SystemStakedTokenBalance ");
         //////////////////////////////////
         if(!isInAvailableWorkers(msg.sender)){
             availableWorkers.push(msg.sender);
@@ -702,12 +667,15 @@ contract DataSpotting is Ownable, RandomAllocator {
     @param _DataBatchId Integer identifier associated with target SpottedData
     */
     function ValidateDataBatch(uint256 _DataBatchId) internal {
+        require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
+        require(Parameters.getRepManager() != address(0), "RepManager is null in Parameters");
+        require(Parameters.getRewardManager() != address(0), "RewardManager is null in Parameters");
         require( DataEnded(_DataBatchId) || ( DataBatch[_DataBatchId].unrevealed_workers == 0 ), "_DataBatchId has not ended, or not every voters have voted"); // votes needs to be closed
         require( DataBatch[_DataBatchId].checked == false, "_DataBatchId is already validated"); // votes needs to be closed
         address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
         string[] memory proposedNewFiles = new string[](allocated_workers_.length);
         uint256[] memory proposedBatchCounts = new uint256[](allocated_workers_.length);
-        
+
         // -------------------------------------------------------------
         // GATHER USER SUBMISSIONS AND VOTE INPUTS BEFORE ASSESSMENT
         for (uint256 i = 0; i < allocated_workers_.length; i++) {
@@ -782,10 +750,16 @@ contract DataSpotting is Ownable, RandomAllocator {
                 if( (isCheckPassed == true && worker_vote_ == 1)
                     || (isCheckPassed == false && worker_vote_ != 1) ){
                     // vote 1 == OK, else = NOT OK, rejected     
-                    // reward worker if he voted like the majority      
-                    address worker_master_addr_ = AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
-                    require(RepManager.mintReputationForWork(Parameters.get_SPOT_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in TriggerCheckSpot, 1.a");
-                    require(RewardManager.ProxyAddReward(Parameters.get_SPOT_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in TriggerCheckSpot, 1.b");
+                    // reward worker if he voted like the majority     
+                                
+                    IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());
+                    IRepManager _RepManager = IRepManager(Parameters.getRepManager());
+                    IRewardManager _RewardManager = IRewardManager(Parameters.getRewardManager());
+
+                    address worker_master_addr_ = _AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
+
+                    require(_RepManager.mintReputationForWork(Parameters.get_SPOT_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in Validate, 1.a");
+                    require(_RewardManager.ProxyAddReward(Parameters.get_SPOT_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in Validate, 1.b");
                     worker_state.majority_counter += 1;       
                 }
                 else{                    
@@ -824,18 +798,27 @@ contract DataSpotting is Ownable, RandomAllocator {
             uint256 end_batch_idx = DataBatch[_DataBatchId].start_idx + DataBatch[_DataBatchId].counter;
             
             for(uint256 l = start_batch_idx; l < end_batch_idx; l++){
-                address spot_author_ = SpotsMapping[l].author;                
-                address spot_author_master_ = AddressManager.FetchHighestMaster(spot_author_); // detect if it's a master address, or a subaddress
-                require(RepManager.mintReputationForWork(Parameters.get_SPOT_MIN_REP_SpotData()*majorityBatchCount, spot_author_master_, ""), "could not reward REP in ValidateDataBatch, 2.a");
-                require(RewardManager.ProxyAddReward(Parameters.get_SPOT_MIN_REWARD_SpotData()*majorityBatchCount, spot_author_master_), "could not reward token in ValidateDataBatch, 2.b");
+                address spot_author_ = SpotsMapping[l].author;    
+                        
+                IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());
+                IRepManager _RepManager = IRepManager(Parameters.getRepManager());
+                IRewardManager _RewardManager = IRewardManager(Parameters.getRewardManager());
+
+                address spot_author_master_ = _AddressManager.FetchHighestMaster(spot_author_); // detect if it's a master address, or a subaddress
+                require(_RepManager.mintReputationForWork(Parameters.get_SPOT_MIN_REP_SpotData()*majorityBatchCount, spot_author_master_, ""), "could not reward REP in ValidateDataBatch, 2.a");
+                require(_RewardManager.ProxyAddReward(Parameters.get_SPOT_MIN_REWARD_SpotData()*majorityBatchCount, spot_author_master_), "could not reward token in ValidateDataBatch, 2.b");
             }
 
             // UPDATE BATCH STATE
             DataBatch[_DataBatchId].status = DataStatus.APPROVED;
             AcceptedBatchsCounter += 1;
 
-            // SEND THIS BATCH TO THIS FORMATTING SYSTEM
-            try FormattingSystem.Ping(_DataBatchId){
+            // SEND THIS BATCH TO THIS FollowingSystem
+            require(Parameters.getComplianceSystem() != address(0), "ComplianceSystem null in Parameters Contract");
+
+            IFollowingSystem _ComplianceSystem = IFollowingSystem(Parameters.getComplianceSystem());
+
+            try _ComplianceSystem.Ping(_DataBatchId){
                 AllTxsCounter += 1;
             } catch(bytes memory err) {
                 emit BytesFailure(err);
@@ -1016,8 +999,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         //_numTokens The number of tokens to be committed towards the target SpottedData
         uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
         // if tx sender has a master, then interact with his master's stake, or himself
-        if (SpotStakedTokenBalance[_selectedAddress] < _numTokens){
-            uint256 remainder = _numTokens.sub(SpotStakedTokenBalance[_selectedAddress]);
+        if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
+            uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
             requestAllocatedStake(remainder, _selectedAddress);
         }
         
@@ -1057,9 +1040,21 @@ contract DataSpotting is Ownable, RandomAllocator {
             TimeframeCounter[NB_TIMEFRAMES] storage UserSpotFlowManager = WorkersSpotFlowManager[_selectedAddress];
             UserSpotFlowManager[GlobalSpotFlowManager.length-1].counter += 1;  
 
-            // ---- TRIGGER UPDATES ON ALL SYSTEMS
-            TriggerUpdate();            
-            try FormattingSystem.TriggerUpdate(){
+            // ---- TRIGGER UPDATES ON ALL SYSTEMS ---- : DataSpotting() is the source of rythm in the WorkSystems pipeline
+            TriggerUpdate();           
+
+            IFollowingSystem _ComplianceSystem = IFollowingSystem(Parameters.getComplianceSystem());
+            try _ComplianceSystem.TriggerUpdate(){
+            } catch(bytes memory err) {
+                emit BytesFailure(err);
+            }
+            IFollowingSystem _IndexingSystem = IFollowingSystem(Parameters.getIndexingSystem());
+            try _IndexingSystem.TriggerUpdate(){
+            } catch(bytes memory err) {
+                emit BytesFailure(err);
+            }
+            IFollowingSystem _ArchivingSystem = IFollowingSystem(Parameters.getArchivingSystem());
+            try _ArchivingSystem.TriggerUpdate(){
             } catch(bytes memory err) {
                 emit BytesFailure(err);
             }
@@ -1081,22 +1076,24 @@ contract DataSpotting is Ownable, RandomAllocator {
     /**
     @notice Commits spot-check-vote using hash of choice and secret salt to conceal spot-check-vote until reveal
     @param _DataBatchId Integer identifier associated with target SpottedData
-    @param _secretHash Commit keccak256 hash of voter's choice and salt (tightly packed in this order)
+    @param _encryptedHash Commit keccak256 hash of voter's choice and salt (tightly packed in this order)
     // @ _prevDataID The ID of the SpottedData that the user has voted the maximum number of tokens in which is still less than or equal to numTokens
     */
     
-    function commitSpotCheck(uint256 _DataBatchId, bytes32 _secretHash, string memory newIPFSHash, uint256 _BatchCount, string memory _From) public {
+    // batchId (int), encryptedHash (str), encryptedVote (str aussi j'imagine, c'est ta fonction x) ), nbDocuments (int), status (str)
+    function commitSpotCheck(uint256 _DataBatchId, bytes32 _encryptedHash, bytes32 _encryptedVote, uint256 _BatchCount, string memory _From) public {
         require(commitPeriodActive(_DataBatchId), "commit period needs to be open for this batchId");
         require(!UserChecksCommits[msg.sender][_DataBatchId], "User has already commited to this batchId");
         require(isWorkerAllocatedToBatch(_DataBatchId, msg.sender), "User needs to be allocated to this batch to commit on it");
+        require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
 
         // ---  Master/SubWorker Stake Management        
         //_numTokens The number of tokens to be committed towards the target SpottedData
         uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
         address _selectedAddress = SelectAddressForUser(msg.sender);
         // if tx sender has a master, then interact with his master's stake, or himself
-        if (SpotStakedTokenBalance[_selectedAddress] < _numTokens){
-            uint256 remainder = _numTokens.sub(SpotStakedTokenBalance[_selectedAddress]);
+        if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
+            uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
             requestAllocatedStake(remainder, _selectedAddress);
         }
           
@@ -1120,8 +1117,9 @@ contract DataSpotting is Ownable, RandomAllocator {
         
         
         store.setAttribute(UUID,  "numTokens", _numTokens);
-        store.setAttribute(UUID, "commitHash", uint256(_secretHash));
-        UserNewFiles[_DataBatchId][msg.sender] = newIPFSHash;
+        store.setAttribute(UUID, "commitHash", uint256(_encryptedHash));
+        store.setAttribute(UUID, "commitVote", uint256(_encryptedVote));
+
         UserBatchCounts[_DataBatchId][msg.sender] = _BatchCount;
         UserBatchFrom[_DataBatchId][msg.sender] = _From;
 
@@ -1141,20 +1139,22 @@ contract DataSpotting is Ownable, RandomAllocator {
     /**
     @notice Reveals spot-check-vote with choice and secret salt used in generating commitHash to attribute committed tokens
     @param _DataBatchId Integer identifier associated with target SpottedData
-    @param _voteOption SpotCheck choice used to generate commitHash for associated SpottedData
+    @param _clearVote SpotCheck choice used to generate commitHash for associated SpottedData
     @param _salt Secret number used to generate commitHash for associated SpottedData
     */
-    function revealSpotCheck(uint256 _DataBatchId, uint256 _voteOption, uint256 _salt) public {
+    //batchId (int), clearHash (str), clearVote (int), randomSeed (int)
+    function revealSpotCheck(uint256 _DataBatchId,  string memory _clearIPFSHash, uint256 _clearVote, uint256 _salt) public {
         // Make sure the reveal period is active
         require(revealPeriodActive(_DataBatchId), "Reveal period not open for this DataID");
         require(UserChecksCommits[msg.sender][_DataBatchId], "User has not commited before, thus can't reveal");
         require(!UserChecksReveals[msg.sender][_DataBatchId], "User has already revealed, thus can't reveal");        
-        require(getEncryptedHash(_voteOption, _salt) == getCommitHash(msg.sender, _DataBatchId),
-        "Not the same vote than what was commited, impossible to match with given _salt & _voteOption"); // compare resultant hash from inputs to original commitHash
-        
+        require(getEncryptedStringHash(_clearIPFSHash, _salt) == getCommitIPFSHash(msg.sender, _DataBatchId),
+        "Not the same hash than commited, impossible to match with given _salt & _clearIPFSHash"); // compare resultant hash from inputs to original commited IPFS hash        
+        require(getEncryptedHash(_clearVote, _salt) == getCommitVoteHash(msg.sender, _DataBatchId),
+        "Not the same vote than commited, impossible to match with given _salt & _clearVote"); // compare resultant hash from inputs to original commited vote hash
         uint256 numTokens = getNumTokens(msg.sender, _DataBatchId);
 
-        if (_voteOption == 1) {// apply numTokens to appropriate SpottedData choice
+        if (_clearVote == 1) {// apply numTokens to appropriate SpottedData choice
             DataBatch[_DataBatchId].votesFor += numTokens;
         } else {
             DataBatch[_DataBatchId].votesAgainst += numTokens;
@@ -1163,7 +1163,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         // ----------------------- USER STATE UPDATE -----------------------
         dllMap[msg.sender].remove(_DataBatchId); // remove the node referring to this spot-check-vote upon reveal
         UserChecksReveals[msg.sender][_DataBatchId] = true;
-        UserVotes[_DataBatchId][msg.sender] = _voteOption;
+        UserVotes[_DataBatchId][msg.sender] = _clearVote;
+        UserNewFiles[_DataBatchId][msg.sender] = _clearIPFSHash;
         
         // ----------------------- WORKER STATE UPDATE -----------------------
         WorkerState storage worker_state = WorkersState[msg.sender];
@@ -1173,7 +1174,6 @@ contract DataSpotting is Ownable, RandomAllocator {
 
         // PUT BACK THE WORKER AS AVAILABLE
         PopFromBusyWorkers(msg.sender);
-        
         if(worker_state.registered){ // only if the worker is still registered, of course.
             if(!isInAvailableWorkers(msg.sender) && (worker_state.unregistration_request == false)){
                 availableWorkers.push(msg.sender);
@@ -1187,7 +1187,7 @@ contract DataSpotting is Ownable, RandomAllocator {
 
         AllTxsCounter += 1;        
         _retrieveSFuel();
-        emit _SpotCheckRevealed(_DataBatchId, numTokens, DataBatch[_DataBatchId].votesFor, DataBatch[_DataBatchId].votesAgainst, _voteOption, msg.sender);
+        emit _SpotCheckRevealed(_DataBatchId, numTokens, DataBatch[_DataBatchId].votesFor, DataBatch[_DataBatchId].votesAgainst, _clearVote, msg.sender);
     }
 
 
@@ -1201,26 +1201,32 @@ contract DataSpotting is Ownable, RandomAllocator {
     @param _numTokens The number of votingTokens desired in exchange for ERC20 tokens
     */
     function requestAllocatedStake(uint256 _numTokens, address _user) internal {
-        require(StakeManager.ProxyStakeAllocate(_numTokens, _user), "Could not request enough allocated stake, requestAllocatedStake");
-        SpotStakedTokenBalance[_user] += _numTokens;
+        require(Parameters.getStakeManager() != address(0), "StakeManager is null in Parameters");
+        IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
+        require(_StakeManager.ProxyStakeAllocate(_numTokens, _user), "Could not request enough allocated stake, requestAllocatedStake");
+        SystemStakedTokenBalance[_user] += _numTokens;
         emit _StakeAllocated(_numTokens, _user);
     }
+    
     
     /**
     @notice Withdraw _numTokens ERC20 tokens from the voting contract, revoking these voting rights
     @param _numTokens The number of ERC20 tokens desired in exchange for voting rights
     */
     function withdrawVotingRights(uint256 _numTokens) public {
-        uint256 availableTokens = SpotStakedTokenBalance[msg.sender].sub(getLockedTokens(msg.sender)); // get locked tokens
+        uint256 availableTokens = SystemStakedTokenBalance[msg.sender].sub(getLockedTokens(msg.sender));
         require(availableTokens >= _numTokens, "availableTokens should be >= _numTokens");
-        require(StakeManager.ProxyStakeDeallocate(_numTokens, msg.sender), "Could not withdrawVotingRights through ProxyStakeDeallocate");
-        SpotStakedTokenBalance[msg.sender] -= _numTokens;
+                
+        IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
+        require(_StakeManager.ProxyStakeDeallocate(_numTokens, msg.sender), "Could not withdrawVotingRights through ProxyStakeDeallocate");
+        SystemStakedTokenBalance[msg.sender] -= _numTokens;
         emit _VotingRightsWithdrawn(_numTokens, msg.sender);
     }
+
     
     
     function getSystemTokenBalance(address _user) public view returns (uint256 tokens) {
-        return(uint256(SpotStakedTokenBalance[_user]));
+        return(uint256(SystemStakedTokenBalance[_user]));
     }
 
     function getAcceptedBatchesCount() public view returns (uint256 count) {
@@ -1260,6 +1266,22 @@ contract DataSpotting is Ownable, RandomAllocator {
     //                              STATE Getters
     // --------------------------------------------------------------------------------------------------------------------------------------------------------
     // --------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    // function _BatchgetIPFShashesForBatch(uint256 _DataBatchId_a, uint256 _DataBatchId_b){
+    //     require(_DataBatchId_a>0 && _DataBatchId_a<_DataBatchId_b,"Input boundaries are invalid");
+    //     BatchMetadata memory batch_ = DataBatch[_DataBatchId];
+    //     uint256 batch_size = batch_.counter;
+
+    //     string[] memory ipfs_hash_list = new string[](batch_size);
+
+    //     for(uint256 i=0; i < batch_size; i++){
+    //         uint256 k = batch_.start_idx + i;
+    //         string memory ipfs_hash_ = SpotsMapping[k].ipfs_hash;
+    //         ipfs_hash_list[i] = ipfs_hash_;
+    //     }
+
+    //     return ipfs_hash_list;
+    // }
 
     
     function getIPFShashesForBatch(uint256 _DataBatchId) public view returns (string[] memory)  {
@@ -1388,7 +1410,7 @@ contract DataSpotting is Ownable, RandomAllocator {
 
         uint256 winningChoice = isPassed(_DataBatchId) ? 1 : 0;
         bytes32 winnerHash = keccak256(abi.encodePacked(winningChoice, _salt));
-        bytes32 commitHash = getCommitHash(_voter, _DataBatchId);
+        bytes32 commitHash = getCommitVoteHash(_voter, _DataBatchId);
 
         require(winnerHash == commitHash, "getNumPassingTokens: hashes must be equal");
 
@@ -1576,24 +1598,36 @@ contract DataSpotting is Ownable, RandomAllocator {
     // DOUBLE-LINKED-LIST HELPERS:
     // ------------------------------------------------------------------------------------------------------------
 
+
     /**
     @dev Gets the bytes32 commitHash property of target SpottedData
     @param _voter Address of user to check against
     @param _DataBatchId Integer identifier associated with target SpottedData
     @return commitHash Bytes32 hash property attached to target SpottedData
     */
-    function getCommitHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
+    function getCommitVoteHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
+        return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitVote"));
+    }
+
+
+    /**
+    @dev Gets the bytes32 commitHash property of target SpottedData
+    @param _voter Address of user to check against
+    @param _DataBatchId Integer identifier associated with target SpottedData
+    @return commitHash Bytes32 hash property attached to target SpottedData
+    */
+    function getCommitIPFSHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
         return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitHash"));
     }
 
     /**
     @dev Gets the bytes32 commitHash property of target SpottedData
-    @param _voteOption vote Option
+    @param _clearVote vote Option
     @param _salt is the salt
     @return keccak256hash Bytes32 hash property attached to target SpottedData
     */
-    function getEncryptedHash(uint256 _voteOption, uint256 _salt)  public pure returns (bytes32 keccak256hash) {
-        return keccak256(abi.encodePacked(_voteOption, _salt));
+    function getEncryptedHash(uint256 _clearVote, uint256 _salt)  public pure returns (bytes32 keccak256hash) {
+        return keccak256(abi.encodePacked(_clearVote, _salt));
     }
 
     /**
@@ -1602,7 +1636,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     @param _salt is the salt
     @return keccak256hash Bytes32 hash property attached to target FormattedData
     */
-    function getEncryptedStringHash(string calldata _hash, uint256 _salt) public pure returns (bytes32 keccak256hash){
+    function getEncryptedStringHash(string memory _hash, uint256 _salt) public pure returns (bytes32 keccak256hash){
         return keccak256(abi.encode(_hash, _salt));
     }
 

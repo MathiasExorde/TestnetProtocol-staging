@@ -39,24 +39,47 @@ contract Parameters is Ownable {
     uint256 public SPOT_NB_TIMEFRAMES = 4;
     uint256 public MAX_SUCCEEDING_NOVOTES  = 3;    
     uint256 public NOVOTE_REGISTRATION_WAIT_DURATION  = 3600;    // in seconds
-    //////////////// FORMATTING RELATED PARAMETERS
-    uint256 public FORMAT_DATA_BATCH_SIZE = 1; 
-    uint256 public FORMAT_MIN_CONSENSUS_WORKER_COUNT  = 2; 
-    uint256 public FORMAT_MAX_CONSENSUS_WORKER_COUNT  = 4;   
-    uint256 public FORMAT_MIN_STAKE = 25 * (10 ** 18); 
-    uint256 public FORMAT_COMMIT_ROUND_DURATION = 400;
-    uint256 public FORMAT_REVEAL_ROUND_DURATION = 180;  
-    uint256 public FORMAT_MIN_REWARD_DataValidation = 1 * (10 ** 15);
-    uint256 public FORMAT_MIN_REP_DataValidation  = 10 * (10 ** 15);
+    //////////////// Compliance RELATED PARAMETERS
+    uint256 public COMPLIANCE_DATA_BATCH_SIZE = 1; 
+    uint256 public COMPLIANCE_MIN_CONSENSUS_WORKER_COUNT  = 2; 
+    uint256 public COMPLIANCE_MAX_CONSENSUS_WORKER_COUNT  = 4;   
+    uint256 public COMPLIANCE_MIN_STAKE = 25 * (10 ** 18); 
+    uint256 public COMPLIANCE_COMMIT_ROUND_DURATION = 400;
+    uint256 public COMPLIANCE_REVEAL_ROUND_DURATION = 180;  
+    uint256 public COMPLIANCE_MIN_REWARD_DataValidation = 1 * (10 ** 15);
+    uint256 public COMPLIANCE_MIN_REP_DataValidation  = 10 * (10 ** 15);
+    //////////////// Compliance RELATED PARAMETERS
+    uint256 public INDEXING_DATA_BATCH_SIZE = 1; 
+    uint256 public INDEXING_MIN_CONSENSUS_WORKER_COUNT  = 2; 
+    uint256 public INDEXING_MAX_CONSENSUS_WORKER_COUNT  = 4;   
+    uint256 public INDEXING_MIN_STAKE = 25 * (10 ** 18); 
+    uint256 public INDEXING_COMMIT_ROUND_DURATION = 400;
+    uint256 public INDEXING_REVEAL_ROUND_DURATION = 180;  
+    uint256 public INDEXING_MIN_REWARD_DataValidation = 1 * (10 ** 15);
+    uint256 public INDEXING_MIN_REP_DataValidation  = 10 * (10 ** 15);
+    //////////////// ACHIVING RELATED PARAMETERS
+    uint256 public ARCHIVING_DATA_BATCH_SIZE = 1; 
+    uint256 public ARCHIVING_MIN_CONSENSUS_WORKER_COUNT  = 2; 
+    uint256 public ARCHIVING_MAX_CONSENSUS_WORKER_COUNT  = 4;   
+    uint256 public ARCHIVING_MIN_STAKE = 25 * (10 ** 18); 
+    uint256 public ARCHIVING_COMMIT_ROUND_DURATION = 400;
+    uint256 public ARCHIVING_REVEAL_ROUND_DURATION = 180;  
+    uint256 public ARCHIVING_MIN_REWARD_DataValidation = 1 * (10 ** 15);
+    uint256 public ARCHIVING_MIN_REP_DataValidation  = 10 * (10 ** 15);
     //////////////// CONTRACTS
     address public token;
     address public StakeManager;
+    address public Reputation;
     address public RepManager;
-    address public RewardManager;
+    address public RewardManager;    
     address public AddressManager;
+    address public sFuel;
+
     address public SpottingSystem;
-    address public FormattingSystem;
-    address public sFuel = 0xc0292e785951B29610D1CC3b32a2C23258622995;
+    address public ComplianceSystem;
+    address public IndexingSystem;
+    address public ArchivingSystem;
+    
 
     
 // for other contracts
@@ -71,9 +94,13 @@ contract Parameters is Ownable {
 //     // -------------- GETTERS : ADDRESSES --------------------    
 //     function getStakeManager() external view returns(address);
 //     function getRepManager() external view returns(address);
+//     function getReputationSystem() external view returns(address);
+//     function getAddressManager() external view returns(address);
 //     function getRewardManager() external view returns(address);
+//     function getArchivingSystem() external view returns(address);
+//     function getIndexingSystem() external view returns(address);
 //     function getSpottingSystem() external view returns(address);
-//     function getFormattingSystem() external view returns(address);
+//     function getComplianceSystem() external view returns(address);
 //     function getsFuelSystem() external view returns(address);
 //     function getExordeToken() external view returns(address);
 //     // -------------- GETTERS : SPOTTING --------------------
@@ -93,16 +120,37 @@ contract Parameters is Ownable {
 //     function get_SPOT_GLOBAL_MAX_SPOT_PER_PERIOD() external view returns(uint256);
 //     function get_SPOT_MAX_SPOT_PER_USER_PER_PERIOD() external view returns(uint256);
 //     function get_SPOT_NB_TIMEFRAMES() external view returns(uint256);
-//     // -------------- GETTERS : FORMATTING --------------------
-//     function get_FORMAT_DATA_BATCH_SIZE() external view returns(uint256);
-//     function get_FORMAT_MIN_STAKE() external view returns(uint256);
-//     function get_FORMAT_MIN_CONSENSUS_WORKER_COUNT() external view returns(uint256);
-//     function get_FORMAT_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
-//     function get_FORMAT_COMMIT_ROUND_DURATION() external view returns(uint256);
-//     function get_FORMAT_REVEAL_ROUND_DURATION() external view returns(uint256);
-//     function get_FORMAT_MIN_REWARD_Data() external view returns(uint256);
-//     function get_FORMAT_MIN_REP_Data() external view returns(uint256);
+//     // -------------- GETTERS : Compliance --------------------
+//     function get_COMPLIANCE_DATA_BATCH_SIZE() external view returns(uint256);
+//     function get_COMPLIANCE_MIN_STAKE() external view returns(uint256);
+//     function get_COMPLIANCE_MIN_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+//     function get_COMPLIANCE_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+//     function get_COMPLIANCE_COMMIT_ROUND_DURATION() external view returns(uint256);
+//     function get_COMPLIANCE_REVEAL_ROUND_DURATION() external view returns(uint256);
+//     function get_COMPLIANCE_MIN_REWARD_DataValidation() external view returns(uint256);
+//     function get_COMPLIANCE_MIN_REP_DataValidation() external view returns(uint256);
+//     // -------------- GETTERS : Indexing --------------------
+//     function get_INDEXING_DATA_BATCH_SIZE() external view returns(uint256);
+//     function get_INDEXING_MIN_STAKE() external view returns(uint256);
+//     function get_INDEXING_MIN_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+//     function get_INDEXING_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+//     function get_INDEXING_COMMIT_ROUND_DURATION() external view returns(uint256);
+//     function get_INDEXING_REVEAL_ROUND_DURATION() external view returns(uint256);
+//     function get_INDEXING_MIN_REWARD_DataValidation() external view returns(uint256);
+//     function get_INDEXING_MIN_REP_DataValidation() external view returns(uint256);
+//     // -------------- GETTERS : Archiving --------------------
+//     function get_ARCHIVING_DATA_BATCH_SIZE() external view returns(uint256);
+//     function get_ARCHIVING_MIN_STAKE() external view returns(uint256);
+//     function get_ARCHIVING_MIN_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+//     function get_ARCHIVING_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+//     function get_ARCHIVING_COMMIT_ROUND_DURATION() external view returns(uint256);
+//     function get_ARCHIVING_REVEAL_ROUND_DURATION() external view returns(uint256);
+//     function get_ARCHIVING_MIN_REWARD_DataValidation() external view returns(uint256);
+//     function get_ARCHIVING_MIN_REP_DataValidation() external view returns(uint256);
 // }
+    function destroyContract() public onlyOwner {
+        selfdestruct(payable(owner()));
+    }
     
     function updateGeneralParameters(uint256 ParameterIndex, uint256 uintValue) public onlyOwner {        
         if(ParameterIndex == 1){
@@ -119,14 +167,17 @@ contract Parameters is Ownable {
         }
     }
 
-
-    function updateContractsAddresses(address StakeManager_, address RepManager_, address RewardManager_, address AddressManager_,
-                                      address SpottingSystem_, address FormattingSystem_, address sFuel_, address token_) public  onlyOwner {
+    function updateContractsAddresses(address StakeManager_, address RepManager_, address Reputation_, address RewardManager_, address AddressManager_,
+                                      address SpottingSystem_, address ComplianceSystem_, address IndexingSystem_, address ArchivingSystem_,
+                                      address sFuel_, address token_) public  onlyOwner {
         if(StakeManager_ != address(0)){
             StakeManager = StakeManager_;
         }
         if(RepManager_ != address(0)){
             RepManager = RepManager_;
+        }
+        if(Reputation_ != address(0)){
+            Reputation = Reputation_;
         }
         if(RewardManager_ != address(0)){
             RewardManager = RewardManager_;
@@ -134,11 +185,17 @@ contract Parameters is Ownable {
         if(AddressManager_ != address(0)){
             AddressManager = AddressManager_;
         }
+        if(ComplianceSystem_ != address(0)){
+            ComplianceSystem = ComplianceSystem_;
+        }
         if(SpottingSystem_ != address(0)){
             SpottingSystem = SpottingSystem_;
         }
-        if(FormattingSystem_ != address(0)){
-            FormattingSystem = FormattingSystem_;
+        if(IndexingSystem_ != address(0)){
+            IndexingSystem = IndexingSystem_;
+        }
+        if(ArchivingSystem_ != address(0)){
+            ArchivingSystem = ArchivingSystem_;
         }
         if(sFuel_ != address(0)){
             sFuel = sFuel_;
@@ -209,30 +266,86 @@ contract Parameters is Ownable {
     }
 
 
-    function updateFormattingParameters(uint256 ParameterIndex, uint256 uintValue) public onlyOwner {        
+    function updateComplianceParameters(uint256 ParameterIndex, uint256 uintValue) public onlyOwner {        
         if(ParameterIndex == 1){
-            FORMAT_DATA_BATCH_SIZE = uintValue;
+            COMPLIANCE_DATA_BATCH_SIZE = uintValue;
         }
         if(ParameterIndex == 2){
-            FORMAT_MIN_STAKE  = uintValue;
+            COMPLIANCE_MIN_STAKE  = uintValue;
         }
         if(ParameterIndex == 3){
-            FORMAT_MIN_CONSENSUS_WORKER_COUNT  = uintValue;
+            COMPLIANCE_MIN_CONSENSUS_WORKER_COUNT  = uintValue;
         }
         if(ParameterIndex == 4){
-            FORMAT_MAX_CONSENSUS_WORKER_COUNT  = uintValue;
+            COMPLIANCE_MAX_CONSENSUS_WORKER_COUNT  = uintValue;
         }
         if(ParameterIndex == 5){
-            FORMAT_COMMIT_ROUND_DURATION  = uintValue;
+            COMPLIANCE_COMMIT_ROUND_DURATION  = uintValue;
         }
         if(ParameterIndex == 6){
-            FORMAT_REVEAL_ROUND_DURATION  = uintValue;
+            COMPLIANCE_REVEAL_ROUND_DURATION  = uintValue;
         }
         if(ParameterIndex == 7){
-            FORMAT_MIN_REP_DataValidation  = uintValue;
+            COMPLIANCE_MIN_REP_DataValidation  = uintValue;
         }
         if(ParameterIndex == 8){
-            FORMAT_MIN_REWARD_DataValidation  = uintValue;
+            COMPLIANCE_MIN_REWARD_DataValidation  = uintValue;
+        }
+    }
+
+
+    function updateIndexingParameters(uint256 ParameterIndex, uint256 uintValue) public onlyOwner {        
+        if(ParameterIndex == 1){
+            INDEXING_DATA_BATCH_SIZE = uintValue;
+        }
+        if(ParameterIndex == 2){
+            INDEXING_MIN_STAKE  = uintValue;
+        }
+        if(ParameterIndex == 3){
+            INDEXING_MIN_CONSENSUS_WORKER_COUNT  = uintValue;
+        }
+        if(ParameterIndex == 4){
+            INDEXING_MAX_CONSENSUS_WORKER_COUNT  = uintValue;
+        }
+        if(ParameterIndex == 5){
+            INDEXING_COMMIT_ROUND_DURATION  = uintValue;
+        }
+        if(ParameterIndex == 6){
+            INDEXING_REVEAL_ROUND_DURATION  = uintValue;
+        }
+        if(ParameterIndex == 7){
+            INDEXING_MIN_REP_DataValidation  = uintValue;
+        }
+        if(ParameterIndex == 8){
+            INDEXING_MIN_REWARD_DataValidation  = uintValue;
+        }
+    }
+
+
+    function updateArchivingParameters(uint256 ParameterIndex, uint256 uintValue) public onlyOwner {        
+        if(ParameterIndex == 1){
+            ARCHIVING_DATA_BATCH_SIZE = uintValue;
+        }
+        if(ParameterIndex == 2){
+            ARCHIVING_MIN_STAKE  = uintValue;
+        }
+        if(ParameterIndex == 3){
+            ARCHIVING_MIN_CONSENSUS_WORKER_COUNT  = uintValue;
+        }
+        if(ParameterIndex == 4){
+            ARCHIVING_MAX_CONSENSUS_WORKER_COUNT  = uintValue;
+        }
+        if(ParameterIndex == 5){
+            ARCHIVING_COMMIT_ROUND_DURATION  = uintValue;
+        }
+        if(ParameterIndex == 6){
+            ARCHIVING_REVEAL_ROUND_DURATION  = uintValue;
+        }
+        if(ParameterIndex == 7){
+            ARCHIVING_MIN_REP_DataValidation  = uintValue;
+        }
+        if(ParameterIndex == 8){
+            ARCHIVING_MIN_REWARD_DataValidation  = uintValue;
         }
     }
 
@@ -258,14 +371,26 @@ contract Parameters is Ownable {
     function getRepManager() public view returns(address){
         return RepManager;
     }
+    function getReputationSystem() public view returns(address){
+        return Reputation;
+    }
+    function getAddressManager() public view returns(address){
+        return AddressManager;
+    }
     function getRewardManager() public view returns(address){
         return RewardManager;
     }    
     function getSpottingSystem() public view returns(address){
         return SpottingSystem;
     }
-    function getFormattingSystem() public view returns(address){
-        return FormattingSystem;
+    function getComplianceSystem() public view returns(address){
+        return ComplianceSystem;
+    }
+    function getIndexingSystem() public view returns(address){
+        return IndexingSystem;
+    }
+    function getArchivingSystem() public view returns(address){
+        return ArchivingSystem;
     }
     function getsFuelSystem() public view returns(address){
         return sFuel;
@@ -330,29 +455,84 @@ contract Parameters is Ownable {
         return NOVOTE_REGISTRATION_WAIT_DURATION;
     }
 
-    // -------------- GETTERS : FORMATTING --------------------
-    function get_FORMAT_DATA_BATCH_SIZE() public view returns(uint256){
-        return FORMAT_DATA_BATCH_SIZE;
+    // -------------- GETTERS : Compliance --------------------
+    function get_COMPLIANCE_DATA_BATCH_SIZE() public view returns(uint256){
+        return COMPLIANCE_DATA_BATCH_SIZE;
     }
-    function get_FORMAT_MIN_STAKE() public view returns(uint256){
-        return FORMAT_MIN_STAKE;
+    function get_COMPLIANCE_MIN_STAKE() public view returns(uint256){
+        return COMPLIANCE_MIN_STAKE;
     }
-    function get_FORMAT_MIN_CONSENSUS_WORKER_COUNT() public view returns(uint256){
-        return FORMAT_MIN_CONSENSUS_WORKER_COUNT;
+    function get_COMPLIANCE_MIN_CONSENSUS_WORKER_COUNT() public view returns(uint256){
+        return COMPLIANCE_MIN_CONSENSUS_WORKER_COUNT;
     }
-    function get_FORMAT_MAX_CONSENSUS_WORKER_COUNT() public view returns(uint256){
-        return FORMAT_MAX_CONSENSUS_WORKER_COUNT;
+    function get_COMPLIANCE_MAX_CONSENSUS_WORKER_COUNT() public view returns(uint256){
+        return COMPLIANCE_MAX_CONSENSUS_WORKER_COUNT;
     }
-    function get_FORMAT_COMMIT_ROUND_DURATION() public view returns(uint256){
-        return FORMAT_COMMIT_ROUND_DURATION;
+    function get_COMPLIANCE_COMMIT_ROUND_DURATION() public view returns(uint256){
+        return COMPLIANCE_COMMIT_ROUND_DURATION;
     }
-    function get_FORMAT_REVEAL_ROUND_DURATION() public view returns(uint256){
-        return FORMAT_REVEAL_ROUND_DURATION;
+    function get_COMPLIANCE_REVEAL_ROUND_DURATION() public view returns(uint256){
+        return COMPLIANCE_REVEAL_ROUND_DURATION;
     }
-    function get_FORMAT_MIN_REWARD_DataValidation() public view returns(uint256){
-        return FORMAT_MIN_REWARD_DataValidation;
+    function get_COMPLIANCE_MIN_REWARD_DataValidation() public view returns(uint256){
+        return COMPLIANCE_MIN_REWARD_DataValidation;
     }
-    function get_FORMAT_MIN_REP_DataValidation() public view returns(uint256){
-        return FORMAT_MIN_REP_DataValidation;
+    function get_COMPLIANCE_MIN_REP_DataValidation() public view returns(uint256){
+        return COMPLIANCE_MIN_REP_DataValidation;
     }
+
+
+    // -------------- GETTERS : Indexing --------------------
+    function get_INDEXING_DATA_BATCH_SIZE() public view returns(uint256){
+        return INDEXING_DATA_BATCH_SIZE;
+    }
+    function get_INDEXING_MIN_STAKE() public view returns(uint256){
+        return INDEXING_MIN_STAKE;
+    }
+    function get_INDEXING_MIN_CONSENSUS_WORKER_COUNT() public view returns(uint256){
+        return INDEXING_MIN_CONSENSUS_WORKER_COUNT;
+    }
+    function get_INDEXING_MAX_CONSENSUS_WORKER_COUNT() public view returns(uint256){
+        return INDEXING_MAX_CONSENSUS_WORKER_COUNT;
+    }
+    function get_INDEXING_COMMIT_ROUND_DURATION() public view returns(uint256){
+        return INDEXING_COMMIT_ROUND_DURATION;
+    }
+    function get_INDEXING_REVEAL_ROUND_DURATION() public view returns(uint256){
+        return INDEXING_REVEAL_ROUND_DURATION;
+    }
+    function get_INDEXING_MIN_REWARD_DataValidation() public view returns(uint256){
+        return INDEXING_MIN_REWARD_DataValidation;
+    }
+    function get_INDEXING_MIN_REP_DataValidation() public view returns(uint256){
+        return INDEXING_MIN_REP_DataValidation;
+    }
+
+
+    // -------------- GETTERS : Archiving --------------------
+    function get_ARCHIVING_DATA_BATCH_SIZE() public view returns(uint256){
+        return ARCHIVING_DATA_BATCH_SIZE;
+    }
+    function get_ARCHIVING_MIN_STAKE() public view returns(uint256){
+        return ARCHIVING_MIN_STAKE;
+    }
+    function get_ARCHIVING_MIN_CONSENSUS_WORKER_COUNT() public view returns(uint256){
+        return ARCHIVING_MIN_CONSENSUS_WORKER_COUNT;
+    }
+    function get_ARCHIVING_MAX_CONSENSUS_WORKER_COUNT() public view returns(uint256){
+        return ARCHIVING_MAX_CONSENSUS_WORKER_COUNT;
+    }
+    function get_ARCHIVING_COMMIT_ROUND_DURATION() public view returns(uint256){
+        return ARCHIVING_COMMIT_ROUND_DURATION;
+    }
+    function get_ARCHIVING_REVEAL_ROUND_DURATION() public view returns(uint256){
+        return ARCHIVING_REVEAL_ROUND_DURATION;
+    }
+    function get_ARCHIVING_MIN_REWARD_DataValidation() public view returns(uint256){
+        return ARCHIVING_MIN_REWARD_DataValidation;
+    }
+    function get_ARCHIVING_MIN_REP_DataValidation() public view returns(uint256){
+        return ARCHIVING_MIN_REP_DataValidation;
+    }
+
 }

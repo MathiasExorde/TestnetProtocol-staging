@@ -119,19 +119,23 @@ interface IParametersManager {
     // -------------- GETTERS : ADDRESSES --------------------    
     function getStakeManager() external view returns(address);
     function getRepManager() external view returns(address);
+    function getAddressManager() external view returns(address);
     function getRewardManager() external view returns(address);
+    function getArchivingSystem() external view returns(address);
+    function getSpottingSystem() external view returns(address);
     function getComplianceSystem() external view returns(address);
+    function getIndexingSystem() external view returns(address);
     function getsFuelSystem() external view returns(address);
     function getExordeToken() external view returns(address);
-    // -------------- GETTERS : ARCHIVETING --------------------
-    function get_ARCHIVE_DATA_BATCH_SIZE() external view returns(uint256);
-    function get_ARCHIVE_MIN_STAKE() external view returns(uint256);
-    function get_ARCHIVE_MIN_CONSENSUS_WORKER_COUNT() external view returns(uint256);
-    function get_ARCHIVE_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
-    function get_ARCHIVE_COMMIT_ROUND_DURATION() external view returns(uint256);
-    function get_ARCHIVE_REVEAL_ROUND_DURATION() external view returns(uint256);
-    function get_ARCHIVE_MIN_REWARD_DataValidation() external view returns(uint256);
-    function get_ARCHIVE_MIN_REP_DataValidation() external view returns(uint256);
+    // -------------- GETTERS : ARCHIVING --------------------
+    function get_ARCHIVING_DATA_BATCH_SIZE() external view returns(uint256);
+    function get_ARCHIVING_MIN_STAKE() external view returns(uint256);
+    function get_ARCHIVING_MIN_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+    function get_ARCHIVING_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+    function get_ARCHIVING_COMMIT_ROUND_DURATION() external view returns(uint256);
+    function get_ARCHIVING_REVEAL_ROUND_DURATION() external view returns(uint256);
+    function get_ARCHIVING_MIN_REWARD_DataValidation() external view returns(uint256);
+    function get_ARCHIVING_MIN_REP_DataValidation() external view returns(uint256);
 }
 
 interface IStakeManager {
@@ -200,7 +204,7 @@ interface IPreviousSystem {
 }
 
 
-interface IArchiveSystem {
+interface IArchivingSystem {
     function Ping(uint256 CheckedBatchId) external returns(bool);    
 }
 
@@ -221,9 +225,9 @@ contract DataArchiving is Ownable, RandomAllocator {
     // Success ratios of the WorkSystem pipeline are defined depending on task subjectivity & complexity.
     //     Desired overall success ratio is defined as the following: Data Output flux >= 0.80 Data Input Flux. This translates 
     //     in the following:
-    //         - Archiveting: 0. 90%
+    //         - Archiving: 0. 90%
     //         - Archive-Checking: 0.99%
-    //         - Archiveting: 0.95%
+    //         - Archiving: 0.95%
     //         - Archive-Checking: 0.99%
     //         - Archiving: 0.99%
     //         - Archive-Checking: 0.99%            
@@ -232,7 +236,7 @@ contract DataArchiving is Ownable, RandomAllocator {
     //     by the rest of the pipeline) & flagged content. This is allocated as follows: 
     //         - Frozen Archive Stakes: 0.3%
     //         - Frozen Archive-Checking Stakes: 0.2%
-    //         - Frozen Archiveting Stakes: 0.2%
+    //         - Frozen Archiving Stakes: 0.2%
     //         - Frozen Archive-Checking Stakes: 0.1%
     //         - Frozen Archiving Stakes: 0.1%
     //         - Flagged Content: 0.1%
@@ -328,7 +332,7 @@ contract DataArchiving is Ownable, RandomAllocator {
     
     // ------ Worker & Stake related structure
     mapping(address => WorkerState) public WorkersState;
-    mapping(address => uint256) public ArchiveStakedTokenBalance; // maps user's address to voteToken balance
+    mapping(address => uint256) public SystemStakedTokenBalance; // maps user's address to voteToken balance
 
     // ------ Worker management structures
     mapping(address => address[]) public MasterWorkers;
@@ -359,12 +363,6 @@ contract DataArchiving is Ownable, RandomAllocator {
 
     // ------ Addresses & Interfaces
     IERC20 public token;
-    IStakeManager public StakeManager;
-    IRepManager public RepManager;
-    IRewardManager public RewardManager;
-    IAddressManager public AddressManager;
-    IPreviousSystem public PreviousSystem;
-    IArchiveSystem public ArchiveSystem;
     IParametersManager public Parameters;
 
     // ============================================================================================================
@@ -378,48 +376,6 @@ contract DataArchiving is Ownable, RandomAllocator {
     
     function destroyContract() public onlyOwner {
         selfdestruct(payable(owner()));
-    }
-
-    function updateStakeManager(address addr)
-    public
-    onlyOwner
-    {
-        StakeManager = IStakeManager(addr);
-    }
-    
-    function updateRepManager(address addr)
-    public
-    onlyOwner
-    {
-        RepManager  = IRepManager(addr);
-    }
-    
-    function updateRewardManager(address addr)
-    public
-    onlyOwner
-    {
-        RewardManager  = IRewardManager(addr);
-    }
-
-    function updatePreviousSystem(address addr)
-    public
-    onlyOwner
-    {
-        PreviousSystem = IPreviousSystem(addr);
-    }
-
-    function updateArchiveManager(address addr)
-    public
-    onlyOwner
-    {
-        ArchiveSystem = IArchiveSystem(addr);
-    }
-
-    function updateAddressManager(address addr)
-    public
-    onlyOwner
-    {
-        AddressManager  = IAddressManager(addr);
     }
 
     function updateParametersManager(address addr)
@@ -608,6 +564,7 @@ contract DataArchiving is Ownable, RandomAllocator {
         WorkerState storage worker_state = WorkersState[msg.sender];
         require((availableWorkers.length+busyWorkers.length) < Parameters.getMaxTotalWorkers(), "Maximum registered workers already");
         require(worker_state.registered == false, "Worker is already registered");
+        require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
         // require worker to NOT have NOT VOTED MAX_SUCCEEDING_NOVOTES times in a row. If so, he has to wait NOVOTE_REGISTRATION_WAIT_DURATION
         require(    !( // NOT
                     worker_state.succeeding_novote_count >= Parameters.get_MAX_SUCCEEDING_NOVOTES() 
@@ -617,24 +574,25 @@ contract DataArchiving is Ownable, RandomAllocator {
         
 
         //_numTokens The number of tokens to be committed towards the target ArchiveData
-        uint256 _numTokens = Parameters.get_ARCHIVE_MIN_STAKE();
+        uint256 _numTokens = Parameters.get_ARCHIVING_MIN_STAKE();
         // Master/SubWorker Stake Management
-        address _senderMaster = AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
-        if (ArchiveStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
+        IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());
+        address _senderMaster = _AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
+        if (SystemStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
             if (_senderMaster != address(0)){
                 // if tx sender has a master, then interact with his master's stake
-                if (ArchiveStakedTokenBalance[_senderMaster] < _numTokens){
-                    uint256 remainder = _numTokens.sub(ArchiveStakedTokenBalance[_senderMaster]);
+                if (SystemStakedTokenBalance[_senderMaster] < _numTokens){
+                    uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_senderMaster]);
                     requestAllocatedStake(remainder, _senderMaster);
                 } // else, it's all good, master has enough allocated stake
             }
             else{
-                uint256 remainder = _numTokens.sub(ArchiveStakedTokenBalance[msg.sender]);
+                uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[msg.sender]);
                 requestAllocatedStake(remainder, msg.sender);
             }
         }
         // make sure msg.sender has enough voting rights
-        require(ArchiveStakedTokenBalance[msg.sender] >= _numTokens, "Worker has not enough (_numTokens) in his ArchiveStakedTokenBalance ");
+        require(SystemStakedTokenBalance[msg.sender] >= _numTokens, "Worker has not enough (_numTokens) in his SystemStakedTokenBalance ");
         //////////////////////////////////
         if(!isInAvailableWorkers(msg.sender)){
             availableWorkers.push(msg.sender);
@@ -691,14 +649,15 @@ contract DataArchiving is Ownable, RandomAllocator {
     // ----------------------------------------------------------------------------------
     
     function Ping(uint256 CheckedBatchId) public{
-        if(PreviousSystem != IPreviousSystem(address(0)) && !CollectedSpotBatchs[CheckedBatchId]){           // don't re import already collected batch 
+        IPreviousSystem PreviousSystem = IPreviousSystem(Parameters.getComplianceSystem());
+        if(Parameters.getComplianceSystem() != address(0) && !CollectedSpotBatchs[CheckedBatchId]){           // don't re import already collected batch 
 
             if( PreviousSystem.DataExists(CheckedBatchId)){                
                 IPreviousSystem.BatchMetadata memory SpotBatch = PreviousSystem.getBatchByID(CheckedBatchId);
                 IPreviousSystem.DataStatus SpotBatchStatus = SpotBatch.status;
                 // If SpotSystem has produced a new APPROVED DATA BATCH, process it in this system. 
                 if(SpotBatchStatus == IPreviousSystem.DataStatus.APPROVED){
-                    // -------- ADDING NEW CHECKED SPOT BATCH AS A NEW ITEM IN OUR ARCHIVETING BATCH --------
+                    // -------- ADDING NEW CHECKED SPOT BATCH AS A NEW ITEM IN OUR ARCHIVING BATCH --------
 
 
                     ArchivesMapping[DataNonce] = ArchiveData({
@@ -710,10 +669,10 @@ contract DataArchiving is Ownable, RandomAllocator {
 
                     // UPDATE STREAMING DATA BATCH STRUCTURE
                     BatchMetadata storage current_data_batch = DataBatch[LastBatchCounter];
-                    if(current_data_batch.counter < Parameters.get_ARCHIVE_DATA_BATCH_SIZE()){
+                    if(current_data_batch.counter < Parameters.get_ARCHIVING_DATA_BATCH_SIZE()){
                         current_data_batch.counter += 1;
                     }                            
-                    if(current_data_batch.counter >= Parameters.get_ARCHIVE_DATA_BATCH_SIZE())
+                    if(current_data_batch.counter >= Parameters.get_ARCHIVING_DATA_BATCH_SIZE())
                     { // batch is complete trigger new work round, new batch
                         current_data_batch.complete = true;
                         current_data_batch.checked = false;
@@ -756,7 +715,7 @@ contract DataArchiving is Ownable, RandomAllocator {
             }
             // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
             if( DataBatch[AllocatedBatchCursor].allocated_to_work != true  
-                && availableWorkers.length >= Parameters.get_ARCHIVE_MIN_CONSENSUS_WORKER_COUNT()                
+                && availableWorkers.length >= Parameters.get_ARCHIVING_MIN_CONSENSUS_WORKER_COUNT()                
                 && LastRandomSeed !=  getRandom() // make sure randomness is refreshed
                 && DataBatch[AllocatedBatchCursor].complete  ){ //nothing to allocate, waiting for this to end
                 AllocateWork();
@@ -785,6 +744,9 @@ contract DataArchiving is Ownable, RandomAllocator {
     @param _DataBatchId Integer identifier associated with target ArchiveData
     */
     function ValidateDataBatch(uint256 _DataBatchId) public {
+        require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
+        require(Parameters.getRepManager() != address(0), "RepManager is null in Parameters");
+        require(Parameters.getRewardManager() != address(0), "RewardManager is null in Parameters");
         require( DataEnded(_DataBatchId) || ( DataBatch[_DataBatchId].unrevealed_workers == 0 ), "_DataBatchId has not ended, or not every voters have voted"); // votes needs to be closed
         require( DataBatch[_DataBatchId].checked == false, "_DataBatchId is already validated"); // votes needs to be closed
         address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
@@ -861,10 +823,14 @@ contract DataArchiving is Ownable, RandomAllocator {
 
                 // then assess if worker is in the majority to reward or not
                 string memory worker_proposed_hash = UserNewFiles[_DataBatchId][worker_addr_];                
-                if( AreStringsEqual(worker_proposed_hash, majorityNewFile) ){ 
-                    address worker_master_addr_ = AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
-                    require(RepManager.mintReputationForWork(Parameters.get_ARCHIVE_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in ValidateDataBatch, 1.a");
-                    require(RewardManager.ProxyAddReward(Parameters.get_ARCHIVE_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in ValidateDataBatch, 1.b");       
+                if( AreStringsEqual(worker_proposed_hash, majorityNewFile) ){                                               
+                    IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());             
+                    IRepManager _RepManager = IRepManager(Parameters.getRepManager());
+                    IRewardManager _RewardsManager = IRewardManager(Parameters.getRewardManager());
+
+                    address worker_master_addr_ = _AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
+                    require(_RepManager.mintReputationForWork(Parameters.get_ARCHIVING_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in ValidateDataBatch, 1.a");
+                    require(_RewardsManager.ProxyAddReward(Parameters.get_ARCHIVING_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in ValidateDataBatch, 1.b");       
                     worker_state.majority_counter += 1;        
                 }
                 else{                    
@@ -902,12 +868,6 @@ contract DataArchiving is Ownable, RandomAllocator {
         if(isPassed(_DataBatchId)){           
             DataBatch[_DataBatchId].status = DataStatus.APPROVED;
             AcceptedBatchsCounter += 1;
-            // SEND THIS BATCH TO THIS ARCHIVE SYSTEM
-            try ArchiveSystem.Ping(_DataBatchId) returns(bool) {
-                AllTxsCounter += 1;
-            } catch(bytes memory err) {
-                emit BytesFailure(err);
-            }
         }
 
         // -------------------------------------------------------------
@@ -933,15 +893,15 @@ contract DataArchiving is Ownable, RandomAllocator {
     function AllocateWork() public  {
         require(DataBatch[AllocatedBatchCursor].complete, "Can't allocate work, the current batch is not complete");
         require(DataBatch[AllocatedBatchCursor].allocated_to_work == false, "Can't allocate work, the current batch is already allocated");
-        uint256 selected_k = Math.max( Math.min(availableWorkers.length, Parameters.get_ARCHIVE_MAX_CONSENSUS_WORKER_COUNT()), Parameters.get_ARCHIVE_MIN_CONSENSUS_WORKER_COUNT()); // pick at most CONSENSUS_WORKER_SIZE workers, minimum 1.
+        uint256 selected_k = Math.max( Math.min(availableWorkers.length, Parameters.get_ARCHIVING_MAX_CONSENSUS_WORKER_COUNT()), Parameters.get_ARCHIVING_MIN_CONSENSUS_WORKER_COUNT()); // pick at most CONSENSUS_WORKER_SIZE workers, minimum 1.
         uint256 n = availableWorkers.length;
 
         ///////////////////////////// BATCH UPDATE STATE /////////////////////////////
         DataBatch[AllocatedBatchCursor].unrevealed_workers = selected_k;
         DataBatch[AllocatedBatchCursor].uncommited_workers = selected_k;
         
-            uint256 _commitEndDate = block.timestamp.add(Parameters.get_ARCHIVE_COMMIT_ROUND_DURATION());
-            uint256 _revealEndDate = _commitEndDate.add(Parameters.get_ARCHIVE_REVEAL_ROUND_DURATION());
+            uint256 _commitEndDate = block.timestamp.add(Parameters.get_ARCHIVING_COMMIT_ROUND_DURATION());
+            uint256 _revealEndDate = _commitEndDate.add(Parameters.get_ARCHIVING_REVEAL_ROUND_DURATION());
         DataBatch[AllocatedBatchCursor].commitEndDate = _commitEndDate;
         DataBatch[AllocatedBatchCursor].revealEndDate = _revealEndDate;
         DataBatch[AllocatedBatchCursor].allocated_to_work = true;
@@ -991,7 +951,7 @@ contract DataArchiving is Ownable, RandomAllocator {
 
 
     // ==============================================================================================================================
-    // ====================================================== ARCHIVETING  =============================================================
+    // ====================================================== ARCHIVING  =============================================================
     // ==============================================================================================================================
 
 
@@ -1011,26 +971,27 @@ contract DataArchiving is Ownable, RandomAllocator {
         require(isWorkerAllocatedToBatch(_DataBatchId, msg.sender), "User needs to be allocated to this batch to commit on it");
 
         //_numTokens The number of tokens to be committed towards the target ArchiveData
-        uint256 _numTokens = Parameters.get_ARCHIVE_MIN_STAKE();
+        uint256 _numTokens = Parameters.get_ARCHIVING_MIN_STAKE();
 
         // Master/SubWorker Stake Management
-        address _senderMaster = AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
-        if (ArchiveStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
+        IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());
+        address _senderMaster = _AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
+        if (SystemStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
             if (_senderMaster != address(0)){
                 // if tx sender has a master, then interact with his master's stake
-                if (ArchiveStakedTokenBalance[_senderMaster] < _numTokens){
-                    uint256 remainder = _numTokens.sub(ArchiveStakedTokenBalance[_senderMaster]);
+                if (SystemStakedTokenBalance[_senderMaster] < _numTokens){
+                    uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_senderMaster]);
                     requestAllocatedStake(remainder, _senderMaster);
                 } // else, it's all good, master has enough allocated stake
             }
             else{
-                uint256 remainder = _numTokens.sub(ArchiveStakedTokenBalance[msg.sender]);
+                uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[msg.sender]);
                 requestAllocatedStake(remainder, msg.sender);
             }
         }
 
         // make sure msg.sender has enough voting rights
-        require(ArchiveStakedTokenBalance[msg.sender] >= _numTokens, "user must have enough voting rights aka allocated stake");
+        require(SystemStakedTokenBalance[msg.sender] >= _numTokens, "user must have enough voting rights aka allocated stake");
 
         uint256 _prevDataID = 0;
 
@@ -1078,7 +1039,7 @@ contract DataArchiving is Ownable, RandomAllocator {
         require(revealPeriodActive(_DataBatchId), "Reveal period not open for this DataID");
         require(UserChecksCommits[msg.sender][_DataBatchId], "User has not commited before, thus can't reveal");
         require(!UserChecksReveals[msg.sender][_DataBatchId], "User has already revealed, thus can't reveal");   
-        require(getEncryptedStringHash(_clearIPFSHash, _salt) == getCommitHash(msg.sender, _DataBatchId),
+        require(getEncryptedStringHash(_clearIPFSHash, _salt) == getCommitIPFSHash(msg.sender, _DataBatchId),
         "Could not match encrypted hash & clear hash with given inputs."); // compare resultant hash from inputs to original commitHash
         
         uint256 numTokens = getNumTokens(msg.sender, _DataBatchId);
@@ -1129,8 +1090,10 @@ contract DataArchiving is Ownable, RandomAllocator {
     @param _numTokens The number of votingTokens desired in exchange for ERC20 tokens
     */
     function requestAllocatedStake(uint256 _numTokens, address _user) internal {
-        require(StakeManager.ProxyStakeAllocate(_numTokens, _user), "Could not request enough allocated stake, requestAllocatedStake");
-        ArchiveStakedTokenBalance[_user] += _numTokens;
+        require(Parameters.getStakeManager() != address(0), "StakeManager is null in Parameters");
+        IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
+        require(_StakeManager.ProxyStakeAllocate(_numTokens, _user), "Could not request enough allocated stake, requestAllocatedStake");
+        SystemStakedTokenBalance[_user] += _numTokens;
         emit _StakeAllocated(_numTokens, _user);
     }
     
@@ -1140,20 +1103,23 @@ contract DataArchiving is Ownable, RandomAllocator {
     @param _numTokens The number of ERC20 tokens desired in exchange for voting rights
     */
     function withdrawVotingRights(uint256 _numTokens) public {
-        uint256 availableTokens = ArchiveStakedTokenBalance[msg.sender].sub(getLockedTokens(msg.sender));
+        uint256 availableTokens = SystemStakedTokenBalance[msg.sender].sub(getLockedTokens(msg.sender));
         require(availableTokens >= _numTokens, "availableTokens should be >= _numTokens");
-        require(StakeManager.ProxyStakeDeallocate(_numTokens, msg.sender), "Could not withdrawVotingRights through ProxyStakeDeallocate");
-        ArchiveStakedTokenBalance[msg.sender] -= _numTokens;
+                
+        IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
+        require(_StakeManager.ProxyStakeDeallocate(_numTokens, msg.sender), "Could not withdrawVotingRights through ProxyStakeDeallocate");
+        SystemStakedTokenBalance[msg.sender] -= _numTokens;
         emit _VotingRightsWithdrawn(_numTokens, msg.sender);
     }
 
+
     
     function getMySystemTokenBalance() public view returns (uint256 tokens) {
-        return(uint256(ArchiveStakedTokenBalance[msg.sender]));
+        return(uint256(SystemStakedTokenBalance[msg.sender]));
     }
     
     function getSystemTokenBalance(address _user) public view returns (uint256 tokens) {
-        return(uint256(ArchiveStakedTokenBalance[_user]));
+        return(uint256(SystemStakedTokenBalance[_user]));
     }
 
     function getAcceptedBatchesCount() public view returns (uint256 count) {
@@ -1309,7 +1275,7 @@ contract DataArchiving is Ownable, RandomAllocator {
 
         uint256 winningChoice = isPassed(_DataBatchId) ? 1 : 0;
         bytes32 winnerHash = keccak256(abi.encodePacked(winningChoice, _salt));
-        bytes32 commitHash = getCommitHash(_voter, _DataBatchId);
+        bytes32 commitHash = getCommitVoteHash(_voter, _DataBatchId);
 
         require(winnerHash == commitHash, "getNumPassingTokens: hashes must be equal");
 
@@ -1549,10 +1515,20 @@ contract DataArchiving is Ownable, RandomAllocator {
     @param _DataBatchId Integer identifier associated with target SpottedData
     @return commitHash Bytes32 hash property attached to target SpottedData
     */
-    function getCommitHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
-        return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitHash"));
+    function getCommitVoteHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
+        return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitVote"));
     }
 
+
+    /**
+    @dev Gets the bytes32 commitHash property of target SpottedData
+    @param _voter Address of user to check against
+    @param _DataBatchId Integer identifier associated with target SpottedData
+    @return commitHash Bytes32 hash property attached to target SpottedData
+    */
+    function getCommitIPFSHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
+        return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitHash"));
+    }
 
     /**
     @dev Gets the bytes32 commitHash property of target ArchiveData

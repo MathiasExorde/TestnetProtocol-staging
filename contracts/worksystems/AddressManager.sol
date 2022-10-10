@@ -24,11 +24,26 @@ interface IRewardManager {
     function RewardsBalanceOf(address _address)  external returns(uint256);
 }
 
+
+interface IParametersManager {
+    // -------------- GETTERS : ADDRESSES --------------------    
+    function getStakeManager() external view returns(address);
+    function getRepManager() external view returns(address);
+    function getReputationSystem() external view returns(address);
+    function getAddressManager() external view returns(address);
+    function getRewardManager() external view returns(address);
+    function getArchivingSystem() external view returns(address);
+    function getSpottingSystem() external view returns(address);
+    function getComplianceSystem() external view returns(address);
+    function getIndexingSystem() external view returns(address);
+    function getsFuelSystem() external view returns(address);
+    function getExordeToken() external view returns(address);
+}
+
 contract AddressManager is Ownable{
     
     mapping (address =>  mapping (address => bool)) public MasterClaimingWorker;  // master -> worker -> true/false
     mapping (address =>  mapping (address => bool)) public WorkerClaimingMaster; // master -> worker -> true/false
-
 
     mapping (address =>  address[]) public MasterToSubsMap;  // master -> workers dynamic array, 1->N relation
     mapping (address =>  address) public SubToMasterMap;  // worker -> master, only 1 master per worker address, 1->1 relation
@@ -36,9 +51,7 @@ contract AddressManager is Ownable{
     
     uint256 MAX_MASTER_LOOKUP  = 5;
 
-    IReputation public Reputation;
-    IRepManager public RepManager;
-    IRewardManager public RewardManager;
+    IParametersManager public Parameters;
     // ------------------------------------------------------------------------------------------
 
     event AddressAddedByMaster(address indexed account, address  account2);
@@ -51,27 +64,13 @@ contract AddressManager is Ownable{
     // ------------------------------------------------------------------------------------------
 
 
-    function updateReputation(address addr)
+    function updateParametersManager(address addr)
     public
     onlyOwner
     {
-        Reputation  = IReputation(addr);
+        require(addr != address(0));
+        Parameters  = IParametersManager(addr);
     }
-
-    function updateRepManager(address addr)
-    public
-    onlyOwner
-    {
-        RepManager  = IRepManager(addr);
-    }
-    
-    function updateRewardManager(address addr)
-    public
-    onlyOwner
-    {
-        RewardManager  = IRewardManager(addr);
-    }
-
 
 
     //// --------------------------- GETTERS FOR MASTERS
@@ -234,16 +233,19 @@ contract AddressManager is Ownable{
     function TransferRepToMaster(address _worker)
         internal
     {           
-        require(address(Reputation) != address(0), "Reputation needs to be setup");
-        require(address(RepManager) != address(0), "RepManager needs to be setup");
+                
+        require(Parameters.getRepManager() != address(0), "RepManager is null in Parameters");
+        require(Parameters.getReputationSystem() != address(0), "RepManager is null in Parameters");
+        IRepManager _RepManager = IRepManager(Parameters.getRepManager());
+        IReputation _Reputation = IReputation(Parameters.getReputationSystem());
         require(SubToMasterMap[_worker] != address(0), "TransferRepToMaster: input _worker needs to have a non-null master"); // needs non null address to transfer Rep.
-        uint256 _worker_rep = Reputation.balanceOf(_worker);
+        uint256 _worker_rep = _Reputation.balanceOf(_worker);
         address _highest_master = FetchHighestMaster(_worker);
         if(_worker_rep > 0){
             // mint current worker rep to the highest master
-            require(RepManager.mintReputationForWork(_worker_rep, _highest_master, ""), "TransferRepToMaster: could not mint Rep to master");
+            require(_RepManager.mintReputationForWork(_worker_rep, _highest_master, ""), "TransferRepToMaster: could not mint Rep to master");
             // then burn the current worker rep to perform the "transfer"
-            require(RepManager.burnReputationForWork(_worker_rep, _worker, ""), "TransferRepToMaster: could not burn Rep from worker");
+            require(_RepManager.burnReputationForWork(_worker_rep, _worker, ""), "TransferRepToMaster: could not burn Rep from worker");
             emit ReputationTransfered(_worker, _highest_master);
         }
     }
@@ -251,12 +253,14 @@ contract AddressManager is Ownable{
     function TransferRewardsToMaster(address _worker)
         internal
     {   
-        require(address(RewardManager) != address(0), "RewardManager needs to be setup");
+        require(Parameters.getRewardManager() != address(0), "RewardManager is null in Parameters");
+        IRewardManager _RewardManager = IRewardManager(Parameters.getRewardManager());
+        require(address(_RewardManager) != address(0), "RewardManager needs to be setup");
         require(SubToMasterMap[_worker] != address(0), "TransferRepToMaster: input _worker needs to have a non-null master"); // needs non null address to transfer Rep.
-        uint256 _worker_rewards = RewardManager.RewardsBalanceOf(_worker);
+        uint256 _worker_rewards = _RewardManager.RewardsBalanceOf(_worker);
         address _highest_master = FetchHighestMaster(_worker);
         if(_worker_rewards > 0){
-            require(RewardManager.ProxyTransferRewards(_worker, _highest_master), "TransferRewardsToMaster: could not transfer rewards");
+            require(_RewardManager.ProxyTransferRewards(_worker, _highest_master), "TransferRewardsToMaster: could not transfer rewards");
             emit RewardsTransfered(_worker, _highest_master);
         }
     }

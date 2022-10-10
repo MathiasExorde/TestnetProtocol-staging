@@ -4,18 +4,18 @@
 pragma solidity 0.8.0;
 
 library AttributeStore3 {
-    struct IndexeredData {
+    struct IndexingData {
         mapping(bytes32 => uint256) store;
     }
 
-    function getAttribute(IndexeredData  storage self, bytes32 _UUID, string memory _attrName)
+    function getAttribute(IndexingData  storage self, bytes32 _UUID, string memory _attrName)
     public view returns (uint256) {
         
         bytes32 key = keccak256(abi.encodePacked(_UUID, _attrName));
         return self.store[key];
     }
 
-    function setAttribute(IndexeredData  storage self, bytes32 _UUID, string memory _attrName, uint256 _attrVal)
+    function setAttribute(IndexingData  storage self, bytes32 _UUID, string memory _attrName, uint256 _attrVal)
     public {
         bytes32 key = keccak256(abi.encodePacked(_UUID, _attrName));
         self.store[key] = _attrVal;
@@ -32,15 +32,15 @@ library DLL3 {
     uint256 prev;
   }
 
-  struct IndexeredData {
+  struct IndexingData {
     mapping(uint256 => Node) dll;
   }
 
-  function isEmpty(IndexeredData storage self) public view returns (bool) {
+  function isEmpty(IndexingData storage self) public view returns (bool) {
     return getStart(self) == NULL_NODE_ID;
   }
 
-  function contains(IndexeredData storage self, uint256 _curr) public view returns (bool) {
+  function contains(IndexingData storage self, uint256 _curr) public view returns (bool) {
     if (isEmpty(self) || _curr == NULL_NODE_ID) {
       return false;
     } 
@@ -50,19 +50,19 @@ library DLL3 {
     return isSingleNode || !isNullNode;
   }
 
-  function getNext(IndexeredData storage self, uint256 _curr) public view returns (uint256) {
+  function getNext(IndexingData storage self, uint256 _curr) public view returns (uint256) {
     return self.dll[_curr].next;
   }
 
-  function getPrev(IndexeredData storage self, uint256 _curr) public view returns (uint256) {
+  function getPrev(IndexingData storage self, uint256 _curr) public view returns (uint256) {
     return self.dll[_curr].prev;
   }
 
-  function getStart(IndexeredData storage self) public view returns (uint256) {
+  function getStart(IndexingData storage self) public view returns (uint256) {
     return getNext(self, NULL_NODE_ID);
   }
 
-  function getEnd(IndexeredData storage self) public view returns (uint256) {
+  function getEnd(IndexingData storage self) public view returns (uint256) {
     return getPrev(self, NULL_NODE_ID);
   }
 
@@ -73,7 +73,7 @@ library DLL3 {
   @param _curr the id of the new node being inserted
   @param _next the node which _new will be inserted before
   */
-  function insert(IndexeredData storage self, uint256 _prev, uint256 _curr, uint256 _next) public {
+  function insert(IndexingData storage self, uint256 _prev, uint256 _curr, uint256 _next) public {
     require(_curr != NULL_NODE_ID,"error: could not insert, 1");
 
     remove(self, _curr);
@@ -91,7 +91,7 @@ library DLL3 {
     self.dll[_next].prev = _curr;
   }
 
-  function remove(IndexeredData storage self, uint256 _curr) public {
+  function remove(IndexingData storage self, uint256 _curr) public {
     if (!contains(self, _curr)) {
       return;
     }
@@ -119,19 +119,23 @@ interface IParametersManager {
     // -------------- GETTERS : ADDRESSES --------------------    
     function getStakeManager() external view returns(address);
     function getRepManager() external view returns(address);
+    function getAddressManager() external view returns(address);
     function getRewardManager() external view returns(address);
+    function getArchivingSystem() external view returns(address);
+    function getSpottingSystem() external view returns(address);
     function getComplianceSystem() external view returns(address);
+    function getIndexingSystem() external view returns(address);
     function getsFuelSystem() external view returns(address);
     function getExordeToken() external view returns(address);
-    // -------------- GETTERS : INDEXERTING --------------------
-    function get_INDEXER_DATA_BATCH_SIZE() external view returns(uint256);
-    function get_INDEXER_MIN_STAKE() external view returns(uint256);
-    function get_INDEXER_MIN_CONSENSUS_WORKER_COUNT() external view returns(uint256);
-    function get_INDEXER_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
-    function get_INDEXER_COMMIT_ROUND_DURATION() external view returns(uint256);
-    function get_INDEXER_REVEAL_ROUND_DURATION() external view returns(uint256);
-    function get_INDEXER_MIN_REWARD_DataValidation() external view returns(uint256);
-    function get_INDEXER_MIN_REP_DataValidation() external view returns(uint256);
+    // -------------- GETTERS : INDEXINGTING --------------------
+    function get_INDEXING_DATA_BATCH_SIZE() external view returns(uint256);
+    function get_INDEXING_MIN_STAKE() external view returns(uint256);
+    function get_INDEXING_MIN_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+    function get_INDEXING_MAX_CONSENSUS_WORKER_COUNT() external view returns(uint256);
+    function get_INDEXING_COMMIT_ROUND_DURATION() external view returns(uint256);
+    function get_INDEXING_REVEAL_ROUND_DURATION() external view returns(uint256);
+    function get_INDEXING_MIN_REWARD_DataValidation() external view returns(uint256);
+    function get_INDEXING_MIN_REP_DataValidation() external view returns(uint256);
 }
 
 interface IStakeManager {
@@ -200,9 +204,9 @@ interface IPreviousSystem {
 }
 
 
-interface IArchiveSystem {
-    function Ping(uint256 CheckedBatchId) external returns(bool);    
-}
+// interface IArchivingSystem {
+//     function Ping(uint256 CheckedBatchId) external returns(bool);    
+// }
 
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -212,7 +216,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./RandomAllocator.sol";
 
 /**
-@title WorkSystem Indexered v0.2
+@title WorkSystem Indexing v0.2
 @author Mathias Dail
 */
 contract DataIndexing is Ownable, RandomAllocator {
@@ -222,28 +226,28 @@ contract DataIndexing is Ownable, RandomAllocator {
     //     Desired overall success ratio is defined as the following: Data Output flux >= 0.80 Data Input Flux. This translates 
     //     in the following:
     //         - Indexing: 0. 90%
-    //         - Indexered-Checking: 0.99%
+    //         - Indexing-Checking: 0.99%
     //         - Indexing: 0.95%
-    //         - Indexered-Checking: 0.99%
+    //         - Indexing-Checking: 0.99%
     //         - Archiving: 0.99%
     //         - Archive-Checking: 0.99%            
     // ================================================================================================
     //     This leaves room for 1% spread out on "frozen stakes" (stakes that are attributed to work that is never processed
     //     by the rest of the pipeline) & flagged content. This is allocated as follows: 
-    //         - Frozen Indexered Stakes: 0.3%
-    //         - Frozen Indexered-Checking Stakes: 0.2%
+    //         - Frozen Indexing Stakes: 0.3%
+    //         - Frozen Indexing-Checking Stakes: 0.2%
     //         - Frozen Indexing Stakes: 0.2%
-    //         - Frozen Indexered-Checking Stakes: 0.1%
+    //         - Frozen Indexing-Checking Stakes: 0.1%
     //         - Frozen Archiving Stakes: 0.1%
     //         - Flagged Content: 0.1%
     // ================================================================================================
 
 
     // ============ EVENTS ============
-    event _IndexeredSubmitted(uint256 indexed DataID, string file_hash, address  sender);
-    event _IndexeredCheckCommitted(uint256 indexed DataID, uint256 numTokens, address indexed voter);
-    event _IndexeredCheckRevealed(uint256 indexed DataID, uint256 numTokens, uint256 votesFor, uint256 votesAgainst, uint256 indexed choice, address indexed voter);
-    event _IndexeredAccepted(string hash, address indexed creator);    
+    event _IndexingSubmitted(uint256 indexed DataID, string file_hash, address  sender);
+    event _IndexingCheckCommitted(uint256 indexed DataID, uint256 numTokens, address indexed voter);
+    event _IndexingCheckRevealed(uint256 indexed DataID, uint256 numTokens, uint256 votesFor, uint256 votesAgainst, uint256 indexed choice, address indexed voter);
+    event _IndexingAccepted(string hash, address indexed creator);    
     event _WorkAllocated(uint256 indexed batchID, address worker);
     event _WorkerRegistered(address indexed worker, uint256 timestamp);
     event _WorkerUnregistered(address indexed worker, uint256 timestamp);
@@ -253,8 +257,8 @@ contract DataIndexing is Ownable, RandomAllocator {
     event _DataBatchDeleted(uint256 indexed batchID);
 
     // ============ LIBRARIES ============
-    using AttributeStore3 for AttributeStore3.IndexeredData;
-    using DLL3 for DLL3.IndexeredData;
+    using AttributeStore3 for AttributeStore3.IndexingData;
+    using DLL3 for DLL3.IndexingData;
     using SafeMath for uint256;
     
 
@@ -293,17 +297,17 @@ contract DataIndexing is Ownable, RandomAllocator {
         bool allocated_to_work;
         uint256 commitEndDate;                     // expiration date of commit period for poll
         uint256 revealEndDate;                     // expiration date of reveal period for poll
-        uint256 votesFor;		                    // tally of indexer-check-votes supporting proposal
-        uint256 votesAgainst;                      // tally of indexer-check-votes countering proposal
-        string batchIPFSfile;                       // to be updated during IndexeredChecking
+        uint256 votesFor;		                    // tally of INDEXING-check-votes supporting proposal
+        uint256 votesAgainst;                      // tally of INDEXING-check-votes countering proposal
+        string batchIPFSfile;                       // to be updated during IndexingChecking
         DataStatus status;                 // state of the vote
     }
 
     // ------ Atomic Data Structure
-    struct IndexeredData {
-        string ipfs_hash;                      // expiration date of commit period for IndexeredData
+    struct IndexingData {
+        string ipfs_hash;                      // expiration date of commit period for IndexingData
         address author;                         // author of the proposal
-        uint256 timestamp;                      // expiration date of commit period for IndexeredData
+        uint256 timestamp;                      // expiration date of commit period for IndexingData
         DataStatus status;                 // state of the vote
     }
 
@@ -312,8 +316,8 @@ contract DataIndexing is Ownable, RandomAllocator {
     // ====================================
 
     // ------ User (workers) Submissions & Commitees Related Structures
-    mapping(address => mapping(uint256 => bool)) public UserChecksCommits;     // indicates whether an address committed a indexer-check-vote for this poll
-    mapping(address => mapping(uint256 => bool)) public UserChecksReveals;     // indicates whether an address revealed a indexer-check-vote for this poll
+    mapping(address => mapping(uint256 => bool)) public UserChecksCommits;     // indicates whether an address committed a INDEXING-check-vote for this poll
+    mapping(address => mapping(uint256 => bool)) public UserChecksReveals;     // indicates whether an address revealed a INDEXING-check-vote for this poll
     mapping(uint256 => mapping(address => uint256)) public UserVotes;     // maps DataID -> user addresses ->  vote option
     mapping(uint256 => mapping(address => string)) public UserNewFiles;     // maps DataID -> user addresses -> ipfs string -> counter
     mapping(uint256 => mapping(address => uint256)) public UserBatchCounts;     // maps DataID -> user addresses -> ipfs string -> counter
@@ -321,14 +325,14 @@ contract DataIndexing is Ownable, RandomAllocator {
     mapping(uint256 => mapping(address => string)) public UserSubmittedStatus;     // maps DataID -> user addresses -> ipfs string -> counter
 
     // ------ Backend Data Stores
-    mapping(address => DLL3.IndexeredData) dllMap;
-    AttributeStore3.IndexeredData store;
-    mapping(uint256 => IndexeredData) public IndexeredsMapping; // maps DataID to IndexeredData struct
-    mapping(uint256 => BatchMetadata) public DataBatch; // refers to IndexeredData indices
+    mapping(address => DLL3.IndexingData) dllMap;
+    AttributeStore3.IndexingData store;
+    mapping(uint256 => IndexingData) public IndexingsMapping; // maps DataID to IndexingData struct
+    mapping(uint256 => BatchMetadata) public DataBatch; // refers to IndexingData indices
     
     // ------ Worker & Stake related structure
     mapping(address => WorkerState) public WorkersState;
-    mapping(address => uint256) public IndexeredStakedTokenBalance; // maps user's address to voteToken balance
+    mapping(address => uint256) public SystemStakedTokenBalance; // maps user's address to voteToken balance
 
     // ------ Worker management structures
     mapping(address => address[]) public MasterWorkers;
@@ -359,12 +363,6 @@ contract DataIndexing is Ownable, RandomAllocator {
 
     // ------ Addresses & Interfaces
     IERC20 public token;
-    IStakeManager public StakeManager;
-    IRepManager public RepManager;
-    IRewardManager public RewardManager;
-    IAddressManager public AddressManager;
-    IPreviousSystem public PreviousSystem;
-    IArchiveSystem public ArchiveSystem;
     IParametersManager public Parameters;
 
     // ============================================================================================================
@@ -378,48 +376,6 @@ contract DataIndexing is Ownable, RandomAllocator {
     
     function destroyContract() public onlyOwner {
         selfdestruct(payable(owner()));
-    }
-
-    function updateStakeManager(address addr)
-    public
-    onlyOwner
-    {
-        StakeManager = IStakeManager(addr);
-    }
-    
-    function updateRepManager(address addr)
-    public
-    onlyOwner
-    {
-        RepManager  = IRepManager(addr);
-    }
-    
-    function updateRewardManager(address addr)
-    public
-    onlyOwner
-    {
-        RewardManager  = IRewardManager(addr);
-    }
-
-    function updatePreviousSystem(address addr)
-    public
-    onlyOwner
-    {
-        PreviousSystem = IPreviousSystem(addr);
-    }
-
-    function updateArchiveManager(address addr)
-    public
-    onlyOwner
-    {
-        ArchiveSystem = IArchiveSystem(addr);
-    }
-
-    function updateAddressManager(address addr)
-    public
-    onlyOwner
-    {
-        AddressManager  = IAddressManager(addr);
     }
 
     function updateParametersManager(address addr)
@@ -461,7 +417,7 @@ contract DataIndexing is Ownable, RandomAllocator {
     public
     onlyOwner
     {
-        delete IndexeredsMapping[_DataId];
+        delete IndexingsMapping[_DataId];
     }
 
     function deleteDataBatch(uint256 _BatchId)
@@ -608,6 +564,7 @@ contract DataIndexing is Ownable, RandomAllocator {
         WorkerState storage worker_state = WorkersState[msg.sender];
         require((availableWorkers.length+busyWorkers.length) < Parameters.getMaxTotalWorkers(), "Maximum registered workers already");
         require(worker_state.registered == false, "Worker is already registered");
+        require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
         // require worker to NOT have NOT VOTED MAX_SUCCEEDING_NOVOTES times in a row. If so, he has to wait NOVOTE_REGISTRATION_WAIT_DURATION
         require(    !( // NOT
                     worker_state.succeeding_novote_count >= Parameters.get_MAX_SUCCEEDING_NOVOTES() 
@@ -615,26 +572,27 @@ contract DataIndexing is Ownable, RandomAllocator {
                     ),
                  "User has not voted many times in a row and needs to wait NOVOTE_REGISTRATION_WAIT_DURATION to register again" );
         
-
-        //_numTokens The number of tokens to be committed towards the target IndexeredData
-        uint256 _numTokens = Parameters.get_INDEXER_MIN_STAKE();
+        //_numTokens The number of tokens to be committed towards the target IndexingData
+        uint256 _numTokens = Parameters.get_INDEXING_MIN_STAKE();
         // Master/SubWorker Stake Management
-        address _senderMaster = AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
-        if (IndexeredStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
+
+        IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());
+        address _senderMaster = _AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
+        if (SystemStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
             if (_senderMaster != address(0)){
                 // if tx sender has a master, then interact with his master's stake
-                if (IndexeredStakedTokenBalance[_senderMaster] < _numTokens){
-                    uint256 remainder = _numTokens.sub(IndexeredStakedTokenBalance[_senderMaster]);
+                if (SystemStakedTokenBalance[_senderMaster] < _numTokens){
+                    uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_senderMaster]);
                     requestAllocatedStake(remainder, _senderMaster);
                 } // else, it's all good, master has enough allocated stake
             }
             else{
-                uint256 remainder = _numTokens.sub(IndexeredStakedTokenBalance[msg.sender]);
+                uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[msg.sender]);
                 requestAllocatedStake(remainder, msg.sender);
             }
         }
         // make sure msg.sender has enough voting rights
-        require(IndexeredStakedTokenBalance[msg.sender] >= _numTokens, "Worker has not enough (_numTokens) in his IndexeredStakedTokenBalance ");
+        require(SystemStakedTokenBalance[msg.sender] >= _numTokens, "Worker has not enough (_numTokens) in his SystemStakedTokenBalance ");
         //////////////////////////////////
         if(!isInAvailableWorkers(msg.sender)){
             availableWorkers.push(msg.sender);
@@ -691,17 +649,18 @@ contract DataIndexing is Ownable, RandomAllocator {
     // ----------------------------------------------------------------------------------
     
     function Ping(uint256 CheckedBatchId) public{
-        if(PreviousSystem != IPreviousSystem(address(0)) && !CollectedSpotBatchs[CheckedBatchId]){           // don't re import already collected batch 
+        IPreviousSystem PreviousSystem = IPreviousSystem(Parameters.getComplianceSystem());
+        if(Parameters.getComplianceSystem() != address(0) && !CollectedSpotBatchs[CheckedBatchId]){           // don't re import already collected batch 
 
             if( PreviousSystem.DataExists(CheckedBatchId)){                
                 IPreviousSystem.BatchMetadata memory SpotBatch = PreviousSystem.getBatchByID(CheckedBatchId);
                 IPreviousSystem.DataStatus SpotBatchStatus = SpotBatch.status;
                 // If SpotSystem has produced a new APPROVED DATA BATCH, process it in this system. 
                 if(SpotBatchStatus == IPreviousSystem.DataStatus.APPROVED){
-                    // -------- ADDING NEW CHECKED SPOT BATCH AS A NEW ITEM IN OUR INDEXERTING BATCH --------
+                    // -------- ADDING NEW CHECKED SPOT BATCH AS A NEW ITEM IN OUR INDEXINGTING BATCH --------
 
 
-                    IndexeredsMapping[DataNonce] = IndexeredData({
+                    IndexingsMapping[DataNonce] = IndexingData({
                         ipfs_hash: SpotBatch.batchIPFSfile,
                         author: msg.sender,
                         timestamp: block.timestamp,
@@ -710,10 +669,10 @@ contract DataIndexing is Ownable, RandomAllocator {
 
                     // UPDATE STREAMING DATA BATCH STRUCTURE
                     BatchMetadata storage current_data_batch = DataBatch[LastBatchCounter];
-                    if(current_data_batch.counter < Parameters.get_INDEXER_DATA_BATCH_SIZE()){
+                    if(current_data_batch.counter < Parameters.get_INDEXING_DATA_BATCH_SIZE()){
                         current_data_batch.counter += 1;
                     }                            
-                    if(current_data_batch.counter >= Parameters.get_INDEXER_DATA_BATCH_SIZE())
+                    if(current_data_batch.counter >= Parameters.get_INDEXING_DATA_BATCH_SIZE())
                     { // batch is complete trigger new work round, new batch
                         current_data_batch.complete = true;
                         current_data_batch.checked = false;
@@ -723,7 +682,7 @@ contract DataIndexing is Ownable, RandomAllocator {
                 
                     TriggerUpdate();
                     DataNonce = DataNonce + 1;
-                    emit _IndexeredSubmitted(DataNonce, SpotBatch.batchIPFSfile, msg.sender);
+                    emit _IndexingSubmitted(DataNonce, SpotBatch.batchIPFSfile, msg.sender);
                        
                 }
                 // }
@@ -756,7 +715,7 @@ contract DataIndexing is Ownable, RandomAllocator {
             }
             // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
             if( DataBatch[AllocatedBatchCursor].allocated_to_work != true  
-                && availableWorkers.length >= Parameters.get_INDEXER_MIN_CONSENSUS_WORKER_COUNT()                
+                && availableWorkers.length >= Parameters.get_INDEXING_MIN_CONSENSUS_WORKER_COUNT()                
                 && LastRandomSeed !=  getRandom() // make sure randomness is refreshed
                 && DataBatch[AllocatedBatchCursor].complete  ){ //nothing to allocate, waiting for this to end
                 AllocateWork();
@@ -780,11 +739,14 @@ contract DataIndexing is Ownable, RandomAllocator {
     event BytesFailure(bytes bytesFailure);
 
     /**
-    @notice Trigger the validation of a IndexeredData hash; if the IndexeredData has ended. If the requirements are APPROVED, 
+    @notice Trigger the validation of a IndexingData hash; if the IndexingData has ended. If the requirements are APPROVED, 
     the CheckedData will be added to the APPROVED list of SpotCheckings
-    @param _DataBatchId Integer identifier associated with target IndexeredData
+    @param _DataBatchId Integer identifier associated with target IndexingData
     */
     function ValidateDataBatch(uint256 _DataBatchId) public {
+        require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
+        require(Parameters.getRepManager() != address(0), "RepManager is null in Parameters");
+        require(Parameters.getRewardManager() != address(0), "RewardManager is null in Parameters");
         require( DataEnded(_DataBatchId) || ( DataBatch[_DataBatchId].unrevealed_workers == 0 ), "_DataBatchId has not ended, or not every voters have voted"); // votes needs to be closed
         require( DataBatch[_DataBatchId].checked == false, "_DataBatchId is already validated"); // votes needs to be closed
         address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
@@ -861,10 +823,14 @@ contract DataIndexing is Ownable, RandomAllocator {
 
                 // then assess if worker is in the majority to reward or not
                 string memory worker_proposed_hash = UserNewFiles[_DataBatchId][worker_addr_];                
-                if( AreStringsEqual(worker_proposed_hash, majorityNewFile) ){ 
-                    address worker_master_addr_ = AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
-                    require(RepManager.mintReputationForWork(Parameters.get_INDEXER_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in ValidateDataBatch, 1.a");
-                    require(RewardManager.ProxyAddReward(Parameters.get_INDEXER_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in ValidateDataBatch, 1.b");       
+                if( AreStringsEqual(worker_proposed_hash, majorityNewFile) ){                                                       
+                    IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());             
+                    IRepManager _RepManager = IRepManager(Parameters.getRepManager());
+                    IRewardManager _RewardsManager = IRewardManager(Parameters.getRewardManager());
+
+                    address worker_master_addr_ = _AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
+                    require(_RepManager.mintReputationForWork(Parameters.get_INDEXING_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in ValidateDataBatch, 1.a");
+                    require(_RewardsManager.ProxyAddReward(Parameters.get_INDEXING_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in ValidateDataBatch, 1.b");       
                     worker_state.majority_counter += 1;        
                 }
                 else{                    
@@ -902,12 +868,14 @@ contract DataIndexing is Ownable, RandomAllocator {
         if(isPassed(_DataBatchId)){           
             DataBatch[_DataBatchId].status = DataStatus.APPROVED;
             AcceptedBatchsCounter += 1;
-            // SEND THIS BATCH TO THIS ARCHIVE SYSTEM
-            try ArchiveSystem.Ping(_DataBatchId) returns(bool) {
-                AllTxsCounter += 1;
-            } catch(bytes memory err) {
-                emit BytesFailure(err);
-            }
+            // // SEND THIS BATCH TO THIS ARCHIVE SYSTEM
+            // try ArchiveSystem.Ping(_DataBatchId) returns(bool) {
+            //     AllTxsCounter += 1;
+            // } catch(bytes memory err) {
+            //     emit BytesFailure(err);
+            // }
+
+            // No archiving for this system
         }
 
         // -------------------------------------------------------------
@@ -922,7 +890,7 @@ contract DataIndexing is Ownable, RandomAllocator {
         NotCommitedCounter += DataBatch[_DataBatchId].uncommited_workers;
         NotRevealedCounter += DataBatch[_DataBatchId].unrevealed_workers;
 
-        emit _IndexeredAccepted(IndexeredsMapping[_DataBatchId].ipfs_hash, IndexeredsMapping[_DataBatchId].author);
+        emit _IndexingAccepted(IndexingsMapping[_DataBatchId].ipfs_hash, IndexingsMapping[_DataBatchId].author);
     }
     
 
@@ -933,15 +901,15 @@ contract DataIndexing is Ownable, RandomAllocator {
     function AllocateWork() public  {
         require(DataBatch[AllocatedBatchCursor].complete, "Can't allocate work, the current batch is not complete");
         require(DataBatch[AllocatedBatchCursor].allocated_to_work == false, "Can't allocate work, the current batch is already allocated");
-        uint256 selected_k = Math.max( Math.min(availableWorkers.length, Parameters.get_INDEXER_MAX_CONSENSUS_WORKER_COUNT()), Parameters.get_INDEXER_MIN_CONSENSUS_WORKER_COUNT()); // pick at most CONSENSUS_WORKER_SIZE workers, minimum 1.
+        uint256 selected_k = Math.max( Math.min(availableWorkers.length, Parameters.get_INDEXING_MAX_CONSENSUS_WORKER_COUNT()), Parameters.get_INDEXING_MIN_CONSENSUS_WORKER_COUNT()); // pick at most CONSENSUS_WORKER_SIZE workers, minimum 1.
         uint256 n = availableWorkers.length;
 
         ///////////////////////////// BATCH UPDATE STATE /////////////////////////////
         DataBatch[AllocatedBatchCursor].unrevealed_workers = selected_k;
         DataBatch[AllocatedBatchCursor].uncommited_workers = selected_k;
         
-            uint256 _commitEndDate = block.timestamp.add(Parameters.get_INDEXER_COMMIT_ROUND_DURATION());
-            uint256 _revealEndDate = _commitEndDate.add(Parameters.get_INDEXER_REVEAL_ROUND_DURATION());
+            uint256 _commitEndDate = block.timestamp.add(Parameters.get_INDEXING_COMMIT_ROUND_DURATION());
+            uint256 _revealEndDate = _commitEndDate.add(Parameters.get_INDEXING_REVEAL_ROUND_DURATION());
         DataBatch[AllocatedBatchCursor].commitEndDate = _commitEndDate;
         DataBatch[AllocatedBatchCursor].revealEndDate = _revealEndDate;
         DataBatch[AllocatedBatchCursor].allocated_to_work = true;
@@ -991,7 +959,7 @@ contract DataIndexing is Ownable, RandomAllocator {
 
 
     // ==============================================================================================================================
-    // ====================================================== INDEXERTING  =============================================================
+    // ====================================================== INDEXINGTING  =============================================================
     // ==============================================================================================================================
 
 
@@ -1000,37 +968,39 @@ contract DataIndexing is Ownable, RandomAllocator {
     // =================
 
     /**
-    @notice Commits indexer-check-vote using hash of choice and secret salt to conceal indexer-check-vote until reveal
-    @param _DataBatchId Integer identifier associated with target IndexeredData
-    @param _secretIPFSHash IndexeredCheck HASH encrypted
-    // @ _prevDataID The ID of the IndexeredData that the user has voted the maximum number of tokens in which is still less than or equal to numTokens
+    @notice Commits INDEXING-check-vote using hash of choice and secret salt to conceal INDEXING-check-vote until reveal
+    @param _DataBatchId Integer identifier associated with target IndexingData
+    @param _secretIPFSHash IndexingCheck HASH encrypted
+    // @ _prevDataID The ID of the IndexingData that the user has voted the maximum number of tokens in which is still less than or equal to numTokens
     */
-    function commitIndexeredCheck(uint256 _DataBatchId, bytes32  _secretIPFSHash, uint256 _BatchCount, string memory _From, string memory _Status) public topUpSFuel {
+    function commitIndexingCheck(uint256 _DataBatchId, bytes32  _secretIPFSHash, uint256 _BatchCount, string memory _From, string memory _Status) public topUpSFuel {
         require(commitPeriodActive(_DataBatchId), "commit period needs to be open");        
         require(!UserChecksCommits[msg.sender][_DataBatchId], "User has already commited to this batchId");
         require(isWorkerAllocatedToBatch(_DataBatchId, msg.sender), "User needs to be allocated to this batch to commit on it");
+        require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
 
-        //_numTokens The number of tokens to be committed towards the target IndexeredData
-        uint256 _numTokens = Parameters.get_INDEXER_MIN_STAKE();
+        //_numTokens The number of tokens to be committed towards the target IndexingData
+        uint256 _numTokens = Parameters.get_INDEXING_MIN_STAKE();
 
         // Master/SubWorker Stake Management
-        address _senderMaster = AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
-        if (IndexeredStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
+        IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());
+        address _senderMaster = _AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
+        if (SystemStakedTokenBalance[msg.sender] < _numTokens){ // if not enough tokens allocated to this worksystem: check if master has some, or try to allocate
             if (_senderMaster != address(0)){
                 // if tx sender has a master, then interact with his master's stake
-                if (IndexeredStakedTokenBalance[_senderMaster] < _numTokens){
-                    uint256 remainder = _numTokens.sub(IndexeredStakedTokenBalance[_senderMaster]);
+                if (SystemStakedTokenBalance[_senderMaster] < _numTokens){
+                    uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_senderMaster]);
                     requestAllocatedStake(remainder, _senderMaster);
                 } // else, it's all good, master has enough allocated stake
             }
             else{
-                uint256 remainder = _numTokens.sub(IndexeredStakedTokenBalance[msg.sender]);
+                uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[msg.sender]);
                 requestAllocatedStake(remainder, msg.sender);
             }
         }
 
         // make sure msg.sender has enough voting rights
-        require(IndexeredStakedTokenBalance[msg.sender] >= _numTokens, "user must have enough voting rights aka allocated stake");
+        require(SystemStakedTokenBalance[msg.sender] >= _numTokens, "user must have enough voting rights aka allocated stake");
 
         uint256 _prevDataID = 0;
 
@@ -1062,35 +1032,35 @@ contract DataIndexing is Ownable, RandomAllocator {
         UserChecksCommits[msg.sender][_DataBatchId] = true;
 
         AllTxsCounter += 1;
-        emit _IndexeredCheckCommitted(_DataBatchId, _numTokens, msg.sender);
+        emit _IndexingCheckCommitted(_DataBatchId, _numTokens, msg.sender);
     }
     
 
     /**
-    @notice Reveals indexer-check-vote with choice and secret salt used in generating commitHash to attribute committed tokens
-    @param _DataBatchId Integer identifier associated with target IndexeredData
-    @param _voteOption IndexeredCheck choice used to generate commitHash for associated IndexeredData
-    @param _clearIPFSHash IndexeredCheck HASH in clear
-    @param _salt Secret number used to generate commitHash for associated IndexeredData
+    @notice Reveals INDEXING-check-vote with choice and secret salt used in generating commitHash to attribute committed tokens
+    @param _DataBatchId Integer identifier associated with target IndexingData
+    @param _voteOption IndexingCheck choice used to generate commitHash for associated IndexingData
+    @param _clearIPFSHash IndexingCheck HASH in clear
+    @param _salt Secret number used to generate commitHash for associated IndexingData
     */
-    function revealIndexeredCheck(uint256 _DataBatchId, uint256 _voteOption, string memory _clearIPFSHash, uint256 _salt) topUpSFuel public {
+    function revealIndexingCheck(uint256 _DataBatchId, uint256 _voteOption, string memory _clearIPFSHash, uint256 _salt) topUpSFuel public {
         // Make sure the reveal period is active
         require(revealPeriodActive(_DataBatchId), "Reveal period not open for this DataID");
         require(UserChecksCommits[msg.sender][_DataBatchId], "User has not commited before, thus can't reveal");
         require(!UserChecksReveals[msg.sender][_DataBatchId], "User has already revealed, thus can't reveal");   
-        require(getEncryptedStringHash(_clearIPFSHash, _salt) == getCommitHash(msg.sender, _DataBatchId),
+        require(getEncryptedStringHash(_clearIPFSHash, _salt) == getCommitIPFSHash(msg.sender, _DataBatchId),
         "Could not match encrypted hash & clear hash with given inputs."); // compare resultant hash from inputs to original commitHash
         
         uint256 numTokens = getNumTokens(msg.sender, _DataBatchId);
 
-        if (_voteOption == 1) {// apply numTokens to appropriate IndexeredData choice
+        if (_voteOption == 1) {// apply numTokens to appropriate IndexingData choice
             DataBatch[_DataBatchId].votesFor += numTokens;
         } else {
             DataBatch[_DataBatchId].votesAgainst += numTokens;
         }
 
         // ----------------------- USER STATE UPDATE -----------------------
-        dllMap[msg.sender].remove(_DataBatchId); // remove the node referring to this indexer-check-vote upon reveal
+        dllMap[msg.sender].remove(_DataBatchId); // remove the node referring to this INDEXING-check-vote upon reveal
         UserChecksReveals[msg.sender][_DataBatchId] = true;
         UserVotes[_DataBatchId][msg.sender] = _voteOption;
         UserNewFiles[_DataBatchId][msg.sender] = _clearIPFSHash;
@@ -1115,7 +1085,7 @@ contract DataIndexing is Ownable, RandomAllocator {
         }
 
         AllTxsCounter += 1;
-        emit _IndexeredCheckRevealed(_DataBatchId, numTokens, DataBatch[_DataBatchId].votesFor, DataBatch[_DataBatchId].votesAgainst, _voteOption, msg.sender);
+        emit _IndexingCheckRevealed(_DataBatchId, numTokens, DataBatch[_DataBatchId].votesFor, DataBatch[_DataBatchId].votesAgainst, _voteOption, msg.sender);
     }
 
 
@@ -1129,8 +1099,10 @@ contract DataIndexing is Ownable, RandomAllocator {
     @param _numTokens The number of votingTokens desired in exchange for ERC20 tokens
     */
     function requestAllocatedStake(uint256 _numTokens, address _user) internal {
-        require(StakeManager.ProxyStakeAllocate(_numTokens, _user), "Could not request enough allocated stake, requestAllocatedStake");
-        IndexeredStakedTokenBalance[_user] += _numTokens;
+        require(Parameters.getStakeManager() != address(0), "StakeManager is null in Parameters");
+        IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
+        require(_StakeManager.ProxyStakeAllocate(_numTokens, _user), "Could not request enough allocated stake, requestAllocatedStake");
+        SystemStakedTokenBalance[_user] += _numTokens;
         emit _StakeAllocated(_numTokens, _user);
     }
     
@@ -1140,20 +1112,22 @@ contract DataIndexing is Ownable, RandomAllocator {
     @param _numTokens The number of ERC20 tokens desired in exchange for voting rights
     */
     function withdrawVotingRights(uint256 _numTokens) public {
-        uint256 availableTokens = IndexeredStakedTokenBalance[msg.sender].sub(getLockedTokens(msg.sender));
+        uint256 availableTokens = SystemStakedTokenBalance[msg.sender].sub(getLockedTokens(msg.sender));
         require(availableTokens >= _numTokens, "availableTokens should be >= _numTokens");
-        require(StakeManager.ProxyStakeDeallocate(_numTokens, msg.sender), "Could not withdrawVotingRights through ProxyStakeDeallocate");
-        IndexeredStakedTokenBalance[msg.sender] -= _numTokens;
+                
+        IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
+        require(_StakeManager.ProxyStakeDeallocate(_numTokens, msg.sender), "Could not withdrawVotingRights through ProxyStakeDeallocate");
+        SystemStakedTokenBalance[msg.sender] -= _numTokens;
         emit _VotingRightsWithdrawn(_numTokens, msg.sender);
     }
 
     
     function getMySystemTokenBalance() public view returns (uint256 tokens) {
-        return(uint256(IndexeredStakedTokenBalance[msg.sender]));
+        return(uint256(SystemStakedTokenBalance[msg.sender]));
     }
     
     function getSystemTokenBalance(address _user) public view returns (uint256 tokens) {
-        return(uint256(IndexeredStakedTokenBalance[_user]));
+        return(uint256(SystemStakedTokenBalance[_user]));
     }
 
     function getAcceptedBatchesCount() public view returns (uint256 count) {
@@ -1166,8 +1140,8 @@ contract DataIndexing is Ownable, RandomAllocator {
 
 
     /**
-    @dev Unlocks tokens locked in unrevealed indexer-check-vote where IndexeredData has ended
-    @param _DataBatchId Integer identifier associated with the target IndexeredData
+    @dev Unlocks tokens locked in unrevealed INDEXING-check-vote where IndexingData has ended
+    @param _DataBatchId Integer identifier associated with the target IndexingData
     */
     function rescueTokens(uint256 _DataBatchId) public {
         require(DataBatch[_DataBatchId].status == DataStatus.APPROVED, "given DataBatch should be APPROVED, and it is not");
@@ -1178,7 +1152,7 @@ contract DataIndexing is Ownable, RandomAllocator {
     }
 
     /**
-    @dev Unlocks tokens locked in unrevealed indexer-check-votes where Datas have ended
+    @dev Unlocks tokens locked in unrevealed INDEXING-check-votes where Datas have ended
     @param _DataBatchIDs Array of integer identifiers associated with the target Datas
     */
     function rescueTokensInMultipleDatas(uint256[] memory _DataBatchIDs) public {
@@ -1206,7 +1180,7 @@ contract DataIndexing is Ownable, RandomAllocator {
 
         for(uint256 i=0; i < batch_size; i++){
             uint256 k = batch_.start_idx + i;
-            string memory ipfs_hash_ = IndexeredsMapping[k].ipfs_hash;
+            string memory ipfs_hash_ = IndexingsMapping[k].ipfs_hash;
             ipfs_hash_list[i] = ipfs_hash_;
         }
 
@@ -1282,11 +1256,11 @@ contract DataIndexing is Ownable, RandomAllocator {
     
 
     /**
-    @dev Compares previous and next IndexeredData's committed tokens for sorting purposes
-    @param _prevID Integer identifier associated with previous IndexeredData in sorted order
-    @param _nextID Integer identifier associated with next IndexeredData in sorted order
+    @dev Compares previous and next IndexingData's committed tokens for sorting purposes
+    @param _prevID Integer identifier associated with previous IndexingData in sorted order
+    @param _nextID Integer identifier associated with next IndexingData in sorted order
     @param _voter Address of user to check DLL position for
-    @param _numTokens The number of tokens to be committed towards the IndexeredData (used for sorting)
+    @param _numTokens The number of tokens to be committed towards the IndexingData (used for sorting)
     @return APPROVED Boolean indication of if the specified position maintains the sort
     */
     function validPosition(uint256 _prevID, uint256 _nextID, address _voter, uint256 _numTokens) public view returns (bool APPROVED) {
@@ -1298,18 +1272,18 @@ contract DataIndexing is Ownable, RandomAllocator {
 
 
     /**
-    @param _DataBatchId Integer identifier associated with target IndexeredData
+    @param _DataBatchId Integer identifier associated with target IndexingData
     @param _salt Arbitrarily chosen integer used to generate secretHash
-    @return correctIndexeredChecks Number of tokens voted for winning option
+    @return correctIndexingChecks Number of tokens voted for winning option
     */
-    function getNumPassingTokens(address _voter, uint256 _DataBatchId, uint256 _salt) public view returns (uint256 correctIndexeredChecks) {
+    function getNumPassingTokens(address _voter, uint256 _DataBatchId, uint256 _salt) public view returns (uint256 correctIndexingChecks) {
         require(DataEnded(_DataBatchId), "_DataBatchId checking vote must have ended");
         require(UserChecksReveals[_voter][_DataBatchId], "user must have revealed in this given Batch");
         
 
         uint256 winningChoice = isPassed(_DataBatchId) ? 1 : 0;
         bytes32 winnerHash = keccak256(abi.encodePacked(winningChoice, _salt));
-        bytes32 commitHash = getCommitHash(_voter, _DataBatchId);
+        bytes32 commitHash = getCommitVoteHash(_voter, _DataBatchId);
 
         require(winnerHash == commitHash, "getNumPassingTokens: hashes must be equal");
 
@@ -1318,12 +1292,12 @@ contract DataIndexing is Ownable, RandomAllocator {
 
     
     /**
-    @notice Trigger the validation of a IndexeredData hash; if the IndexeredData has ended. If the requirements are APPROVED, 
-    the IndexeredChecking will be added to the APPROVED list of IndexeredCheckings
-    @param _DataBatchId Integer identifier associated with target IndexeredData
+    @notice Trigger the validation of a IndexingData hash; if the IndexingData has ended. If the requirements are APPROVED, 
+    the IndexingChecking will be added to the APPROVED list of IndexingCheckings
+    @param _DataBatchId Integer identifier associated with target IndexingData
     */
-    function getTotalNumberOfIndexeredChecks(uint256 _DataBatchId) public view returns (uint256 vc)  {
-        // Build IndexeredCheckings Struct
+    function getTotalNumberOfIndexingChecks(uint256 _DataBatchId) public view returns (uint256 vc)  {
+        // Build IndexingCheckings Struct
         uint256 token_vote_count = DataBatch[_DataBatchId].votesFor + DataBatch[_DataBatchId].votesAgainst;
         return token_vote_count;
     }
@@ -1331,8 +1305,8 @@ contract DataIndexing is Ownable, RandomAllocator {
 
     /**
     @notice Determines if proposal has passed
-    @dev Check if votesFor out of totalIndexeredChecks exceeds votesQuorum (requires DataEnded)
-    @param _DataBatchId Integer identifier associated with target IndexeredData
+    @dev Check if votesFor out of totalIndexingChecks exceeds votesQuorum (requires DataEnded)
+    @param _DataBatchId Integer identifier associated with target IndexingData
     */
     function isPassed(uint256 _DataBatchId)  public view returns (bool passed) {
         // require(DataEnded(_DataBatchId), "Data Batch Checking commitee must have ended");
@@ -1342,8 +1316,8 @@ contract DataIndexing is Ownable, RandomAllocator {
     }
 
     /**
-    @notice Determines if IndexeredData is over
-    @dev Checks isExpired for specified IndexeredData's revealEndDate
+    @notice Determines if IndexingData is over
+    @dev Checks isExpired for specified IndexingData's revealEndDate
     @return ended Boolean indication of whether Dataing period is over
     */
     function DataEnded(uint256 _DataBatchId) public view returns (bool ended) {
@@ -1431,9 +1405,9 @@ contract DataIndexing is Ownable, RandomAllocator {
 
 
     /**
-    @notice Checks if the reveal period is still active for the specified IndexeredData
-    @dev Checks isExpired for the specified IndexeredData's revealEndDate
-    @param _DataBatchId Integer identifier associated with target IndexeredData
+    @notice Checks if the reveal period is still active for the specified IndexingData
+    @dev Checks isExpired for the specified IndexingData's revealEndDate
+    @param _DataBatchId Integer identifier associated with target IndexingData
     */
     function revealPeriodActive(uint256 _DataBatchId) public view returns (bool active) {
         require(DataExists(_DataBatchId), "_DataBatchId must exist");
@@ -1442,35 +1416,35 @@ contract DataIndexing is Ownable, RandomAllocator {
     }
 
     /**
-    @dev Checks if user has committed for specified IndexeredData
+    @dev Checks if user has committed for specified IndexingData
     @param _voter Address of user to check against
-    @param _DataBatchId Integer identifier associated with target IndexeredData
+    @param _DataBatchId Integer identifier associated with target IndexingData
     @return committed Boolean indication of whether user has committed
     */
     function didCommit(address _voter, uint256 _DataBatchId) public view returns (bool committed) {
         require(DataExists(_DataBatchId), "_DataBatchId must exist");
 
-        // return IndexeredsMapping[_DataBatchId].didCommit[_voter];
+        // return IndexingsMapping[_DataBatchId].didCommit[_voter];
         return UserChecksCommits[_voter][_DataBatchId];
     }
 
     /**
-    @dev Checks if user has revealed for specified IndexeredData
+    @dev Checks if user has revealed for specified IndexingData
     @param _voter Address of user to check against
-    @param _DataBatchId Integer identifier associated with target IndexeredData
+    @param _DataBatchId Integer identifier associated with target IndexingData
     @return revealed Boolean indication of whether user has revealed
     */
     function didReveal(address _voter, uint256 _DataBatchId) public view returns (bool revealed) {
         require(DataExists(_DataBatchId), "_DataBatchId must exist");
 
-        // return IndexeredsMapping[_DataBatchId].didReveal[_voter];
+        // return IndexingsMapping[_DataBatchId].didReveal[_voter];
         return UserChecksReveals[_voter][_DataBatchId];
     }
 
     /**
-    @dev Checks if a IndexeredData exists
+    @dev Checks if a IndexingData exists
     @param _DataBatchId The DataID whose existance is to be evaluated.
-    @return exists Boolean Indicates whether a IndexeredData exists for the provided DataID
+    @return exists Boolean Indicates whether a IndexingData exists for the provided DataID
     */
     function DataExists(uint256 _DataBatchId) public view returns  (bool exists) {
         return (_DataBatchId <= LastBatchCounter);
@@ -1535,8 +1509,8 @@ contract DataIndexing is Ownable, RandomAllocator {
     @notice getLastBachDataId
     @return data of the last Dataed a user started
     */
-    function getDataByID(uint256 _DataId) public view returns (IndexeredData memory data) {
-        return  IndexeredsMapping[_DataId];
+    function getDataByID(uint256 _DataId) public view returns (IndexingData memory data) {
+        return  IndexingsMapping[_DataId];
     }
 
     // ------------------------------------------------------------------------------------------------------------
@@ -1549,16 +1523,26 @@ contract DataIndexing is Ownable, RandomAllocator {
     @param _DataBatchId Integer identifier associated with target SpottedData
     @return commitHash Bytes32 hash property attached to target SpottedData
     */
-    function getCommitHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
-        return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitHash"));
+    function getCommitVoteHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
+        return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitVote"));
     }
 
 
     /**
-    @dev Gets the bytes32 commitHash property of target IndexeredData
+    @dev Gets the bytes32 commitHash property of target SpottedData
+    @param _voter Address of user to check against
+    @param _DataBatchId Integer identifier associated with target SpottedData
+    @return commitHash Bytes32 hash property attached to target SpottedData
+    */
+    function getCommitIPFSHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
+        return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitHash"));
+    }
+
+    /**
+    @dev Gets the bytes32 commitHash property of target IndexingData
     @param _hash ipfs hash of aggregated data in a string
     @param _salt is the salt
-    @return keccak256hash Bytes32 hash property attached to target IndexeredData
+    @return keccak256hash Bytes32 hash property attached to target IndexingData
     */
     function getEncryptedStringHash(string memory _hash, uint256 _salt) public pure returns (bytes32 keccak256hash){
         return keccak256(abi.encode(_hash, _salt));
@@ -1567,17 +1551,17 @@ contract DataIndexing is Ownable, RandomAllocator {
     /**
     @dev Wrapper for getAttribute with attrName="numTokens"
     @param _voter Address of user to check against
-    @param _DataBatchId Integer identifier associated with target IndexeredData
-    @return numTokens Number of tokens committed to IndexeredData in sorted IndexeredData-linked-list
+    @param _DataBatchId Integer identifier associated with target IndexingData
+    @return numTokens Number of tokens committed to IndexingData in sorted IndexingData-linked-list
     */
     function getNumTokens(address _voter, uint256 _DataBatchId)  public view returns (uint256 numTokens) {
         return store.getAttribute(attrUUID(_voter, _DataBatchId), "numTokens");
     }
 
     /**
-    @dev Gets top element of sorted IndexeredData-linked-list
+    @dev Gets top element of sorted IndexingData-linked-list
     @param _voter Address of user to check against
-    @return DataID Integer identifier to IndexeredData with maximum number of tokens committed to it
+    @return DataID Integer identifier to IndexingData with maximum number of tokens committed to it
     */
     function getLastNode(address _voter)  public view returns (uint256 DataID) {
         return dllMap[_voter].getPrev(0);
@@ -1586,7 +1570,7 @@ contract DataIndexing is Ownable, RandomAllocator {
     /**
     @dev Gets the numTokens property of getLastNode
     @param _voter Address of user to check against
-    @return numTokens Maximum number of tokens committed in IndexeredData specified
+    @return numTokens Maximum number of tokens committed in IndexingData specified
     */
     function getLockedTokens(address _voter)  public view returns (uint256 numTokens) {
         return getNumTokens(_voter, getLastNode(_voter));
@@ -1642,8 +1626,8 @@ contract DataIndexing is Ownable, RandomAllocator {
     
 
     /**
-    @dev Generates an identifier which associates a user and a IndexeredData together
-    @param _DataBatchId Integer identifier associated with target IndexeredData
+    @dev Generates an identifier which associates a user and a IndexingData together
+    @param _DataBatchId Integer identifier associated with target IndexingData
     @return UUID Hash which is deterministic from _user and _DataBatchId
     */
     function attrUUID(address _user, uint256 _DataBatchId) public pure returns (bytes32 UUID) {
