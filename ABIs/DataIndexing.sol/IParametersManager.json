@@ -5,6 +5,32 @@
   "abi": [
     {
       "inputs": [],
+      "name": "getAddressManager",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getArchivingSystem",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "getComplianceSystem",
       "outputs": [
         {
@@ -19,6 +45,19 @@
     {
       "inputs": [],
       "name": "getExordeToken",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getIndexingSystem",
       "outputs": [
         {
           "internalType": "address",
@@ -70,6 +109,19 @@
     },
     {
       "inputs": [],
+      "name": "getSpottingSystem",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "getStakeManager",
       "outputs": [
         {
@@ -96,7 +148,7 @@
     },
     {
       "inputs": [],
-      "name": "get_INDEXER_COMMIT_ROUND_DURATION",
+      "name": "get_INDEXING_COMMIT_ROUND_DURATION",
       "outputs": [
         {
           "internalType": "uint256",
@@ -109,7 +161,7 @@
     },
     {
       "inputs": [],
-      "name": "get_INDEXER_DATA_BATCH_SIZE",
+      "name": "get_INDEXING_DATA_BATCH_SIZE",
       "outputs": [
         {
           "internalType": "uint256",
@@ -122,7 +174,7 @@
     },
     {
       "inputs": [],
-      "name": "get_INDEXER_MAX_CONSENSUS_WORKER_COUNT",
+      "name": "get_INDEXING_MAX_CONSENSUS_WORKER_COUNT",
       "outputs": [
         {
           "internalType": "uint256",
@@ -135,7 +187,7 @@
     },
     {
       "inputs": [],
-      "name": "get_INDEXER_MIN_CONSENSUS_WORKER_COUNT",
+      "name": "get_INDEXING_MIN_CONSENSUS_WORKER_COUNT",
       "outputs": [
         {
           "internalType": "uint256",
@@ -148,7 +200,7 @@
     },
     {
       "inputs": [],
-      "name": "get_INDEXER_MIN_REP_DataValidation",
+      "name": "get_INDEXING_MIN_REP_DataValidation",
       "outputs": [
         {
           "internalType": "uint256",
@@ -161,7 +213,7 @@
     },
     {
       "inputs": [],
-      "name": "get_INDEXER_MIN_REWARD_DataValidation",
+      "name": "get_INDEXING_MIN_REWARD_DataValidation",
       "outputs": [
         {
           "internalType": "uint256",
@@ -174,7 +226,7 @@
     },
     {
       "inputs": [],
-      "name": "get_INDEXER_MIN_STAKE",
+      "name": "get_INDEXING_MIN_STAKE",
       "outputs": [
         {
           "internalType": "uint256",
@@ -187,7 +239,7 @@
     },
     {
       "inputs": [],
-      "name": "get_INDEXER_REVEAL_ROUND_DURATION",
+      "name": "get_INDEXING_REVEAL_ROUND_DURATION",
       "outputs": [
         {
           "internalType": "uint256",
