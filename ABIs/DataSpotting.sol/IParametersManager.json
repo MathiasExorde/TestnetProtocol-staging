@@ -5,6 +5,45 @@
   "abi": [
     {
       "inputs": [],
+      "name": "getAddressManager",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getArchivingSystem",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getComplianceSystem",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
       "name": "getExordeToken",
       "outputs": [
         {
@@ -18,7 +57,7 @@
     },
     {
       "inputs": [],
-      "name": "getFormattingSystem",
+      "name": "getIndexingSystem",
       "outputs": [
         {
           "internalType": "address",
