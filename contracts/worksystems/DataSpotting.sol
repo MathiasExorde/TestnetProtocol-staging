@@ -149,6 +149,8 @@ interface IParametersManager {
 interface IStakeManager {
     function ProxyStakeAllocate(uint256 _StakeAllocation, address _stakeholder) external returns(bool);
     function ProxyStakeDeallocate(uint256 _StakeToDeallocate, address _stakeholder) external returns(bool);
+    function AvailableStakedAmountOf(address _stakeholder) external view returns(uint256);
+    function AllocatedStakedAmountOf(address _stakeholder) external view returns(uint256);
 }
 
 interface IRepManager {
@@ -428,6 +430,16 @@ contract DataSpotting is Ownable, RandomAllocator {
         return found;
     }
 
+    function IsInLogoffList(address _worker) internal view returns(bool){
+        bool found = false;
+        for(uint256 i = 0; i< toUnregisterWorkers.length; i++){
+            if(toUnregisterWorkers[i] == _worker){
+                found = true;
+                break;
+            }
+        }
+        return found;
+    }
     
     function PopFromAvailableWorkers(address _worker) internal{
         uint256 index = 0;
@@ -463,6 +475,24 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
     }
 
+    
+    function PopFromLogoffList(address _worker) internal{
+        uint256 index = 0;
+        bool found = false;
+        for(uint256 i = 0; i< toUnregisterWorkers.length; i++){
+            if(toUnregisterWorkers[i] == _worker){
+                found = true;
+                index = i;
+                break;
+            }
+        }
+        if(found){
+            toUnregisterWorkers[index] = toUnregisterWorkers[toUnregisterWorkers.length - 1];
+            toUnregisterWorkers.pop();
+        }
+    }
+
+
     function isWorkerAllocatedToBatch(uint256 _DataBatchId, address _worker) public view returns(bool){
         bool found = false;
         address[] memory allocated_workers_ = WorkersPerBatch[_DataBatchId];
@@ -475,27 +505,52 @@ contract DataSpotting is Ownable, RandomAllocator {
         return found;
     }
 
-
-    function SelectAddressForUser(address _worker) public view returns(address){
+    // Select Address for a worker address, between himself and a potential master & main (highest master) according to their Available Stakes
+    function SelectAddressForUser(address _worker, uint256 _TokensAmountToAllocate) public view returns(address){
         require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
-        address selected_addr;
+        require(Parameters.getStakeManager() != address(0), "StakeManager is null in Parameters");
+        IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
         IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());
-        address _senderMaster = _AddressManager.getMaster(msg.sender); // detect if it's a master address, or a subaddress
-        if (_senderMaster != address(0)){
-            selected_addr = _senderMaster;
+
+        address _SelectedAddress = _worker;
+        address _CurrentAddress = _worker;
+        uint256 iterations = 5;
+
+        while(_CurrentAddress != address(0) && (iterations > 0)){
+            // check if _CurrentAddress has enough available stake
+            uint256 _CurrentAvailableStake = _StakeManager.AvailableStakedAmountOf(_CurrentAddress);
+            
+            // Case 1 : the _CurrentAddress has enough staked in the system already, then good.
+            if (SystemStakedTokenBalance[_CurrentAddress] >= _TokensAmountToAllocate){
+                // Found enough Staked in the system already, return this address
+                _SelectedAddress = _CurrentAddress;
+                break;
+            }
+            // Case 2 : the _CurrentAddress has partially enough staked in the system already and enough to allocate on StakeManager
+            else if (SystemStakedTokenBalance[_CurrentAddress] <= _TokensAmountToAllocate && SystemStakedTokenBalance[_CurrentAddress] > 0){
+                uint256 remainderAmountToAllocate = _TokensAmountToAllocate.sub(SystemStakedTokenBalance[_CurrentAddress]);
+                if (_CurrentAvailableStake >= remainderAmountToAllocate){
+                    // There is enough in the AvailableStake to allocate, return this address
+                    _SelectedAddress = _CurrentAddress;
+                    break;
+                }
+            }
+            // Case 3 : the _CurrentAddress enough to allocate on StakeManager for the given amount
+            if (_CurrentAvailableStake >= _TokensAmountToAllocate){
+                // There is enough in the AvailableStake to allocate, return this address
+                _SelectedAddress = _CurrentAddress;
+                break;
+            }
+
+            _CurrentAddress = _AddressManager.getMaster(_CurrentAddress);
+            iterations -= 1;
         }
-        else{
-            selected_addr = _worker;
-        }
-        return selected_addr;
+
+        return _SelectedAddress;
     }
 
-    // event debug1(address indexed user);
-    // event debug2(address indexed user);
-    // event debug3(address indexed user);
-    // event debug4(address indexed user);
-    // event debug5(address indexed user);
-    // event debug6(address indexed user);
+
+
 
     /* Register worker (online) */
     function RegisterWorker() public {
@@ -512,7 +567,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         // ---  Master/SubWorker Stake Management        
         //_numTokens The number of tokens to be committed towards the target SpottedData
         uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
-        address _selectedAddress = SelectAddressForUser(msg.sender);
+        address _selectedAddress = SelectAddressForUser(msg.sender, _numTokens);
         // if tx sender has a master, then interact with his master's stake, or himself
         if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
             uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
@@ -541,7 +596,8 @@ contract DataSpotting is Ownable, RandomAllocator {
     function UnregisterWorker() public {
         WorkerState storage worker_state = WorkersState[msg.sender];
         require(worker_state.registered == true, "Worker is not registered so can't unregister");
-        if( worker_state.allocated_work_batch != 0 && worker_state.unregistration_request == false ){
+        if( worker_state.allocated_work_batch != 0 && worker_state.unregistration_request == false
+            && IsInLogoffList(msg.sender) == false ){
             worker_state.unregistration_request = true;
             toUnregisterWorkers.push(msg.sender);
         }
@@ -568,9 +624,10 @@ contract DataSpotting is Ownable, RandomAllocator {
                 worker_state.unregistration_request = false;
                 PopFromAvailableWorkers(worker_addr_);
                 PopFromBusyWorkers(worker_addr_);
+                PopFromLogoffList(worker_addr_);
+                emit _WorkerUnregistered(worker_addr_, block.timestamp);
             }
         }
-        delete toUnregisterWorkers;
     }
 
     // ----------------------------------------------------------------------------------
@@ -691,7 +748,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         uint256 majority_min_count = Math.max(allocated_workers_.length * Parameters.getVoteQuorum() / 100, 1);
 
         // GET THE MAJORITY NEW HASH IPFS FILE
-        string memory majorityNewFile = proposedNewFiles[0]; //take first file by default, just in case
+        string memory majorityNewFile = ""; //take first file by default, just in case
         for(uint256 k = 0; k < proposedNewFiles.length; k++){
             // count if this given New File is submitted by a majority
             uint256 counter = 0;
@@ -710,7 +767,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
 
         // GET THE MAJORITY BATCH COUNT
-        uint256  majorityBatchCount = proposedBatchCounts[0]; //take first file by default, just in case
+        uint256  majorityBatchCount = 0; //take first file by default, just in case
         for(uint256 k = 0; k < proposedBatchCounts.length; k++){
             // count if this given New File is submitted by a majority
             uint256 counter = 0;
@@ -729,8 +786,11 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
 
         // -------------------------------------------------------------
-        // ASSESS VOTE RESULT AND REWARD USERS ACCORDINGLY
-        bool isCheckPassed = isPassed(_DataBatchId);
+        // ASSESS VOTE RESULT AND REWARD USERS ACCORDINGLY 
+        // IMPORTANT: AND IF MAJORITY EXISTS
+        bool isCheckPassed = isPassed(_DataBatchId) && (AreStringsEqual(majorityNewFile,"") == false) && (majorityBatchCount != 0) ;
+
+        // ADD MAX BATCH COUNT HERE
 
         for (uint256 i = 0; i < allocated_workers_.length; i++) {
             address worker_addr_ = allocated_workers_[i];
@@ -772,9 +832,8 @@ contract DataSpotting is Ownable, RandomAllocator {
                     }
                 }
             }
-            // if worker has not voted, he is disconnected "by force" OR if asked to be unregistered
-            // this worker will have to register again
-            else if( worker_state.unregistration_request || (has_worker_voted_ == false)){                      
+            // if worker has not voted
+            else{                      
                 WorkersState[worker_addr_].succeeding_novote_count += 1;// worker has not voted, increase the counter
                 if(WorkersState[worker_addr_].succeeding_novote_count == Parameters.get_MAX_SUCCEEDING_NOVOTES()){ // only if the worker is still registered
                     worker_state.registered = false;
@@ -792,7 +851,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         DataBatch[_DataBatchId].item_count = majorityBatchCount;
         // -------------------------------------------------------------
         // IF THE DATA BLOCK IS ACCEPTED
-        if(isCheckPassed){           
+        if(isCheckPassed ){           
             // Reward Spotters involved in the Batch
             uint256 start_batch_idx = DataBatch[_DataBatchId].start_idx;
             uint256 end_batch_idx = DataBatch[_DataBatchId].start_idx + DataBatch[_DataBatchId].counter;
@@ -985,10 +1044,12 @@ contract DataSpotting is Ownable, RandomAllocator {
         // ---- Spot Flow Management ---------------------------------------
         require(Parameters.get_SPOT_TOGGLE_ENABLED(), "Spotting is not currently enabled by Owner");
         require(file_hashs.length == URL_domains.length, "Spotting: input arrays must be of same length");
-        address _selectedAddress = SelectAddressForUser(msg.sender);
         // -- global flow checking
         updateGlobalSpotFlow(); // first update the Global SpotFlow Management System
         require(getGlobalPeriodSpotCount() < Parameters.get_SPOT_GLOBAL_MAX_SPOT_PER_PERIOD(), "Global limit: exceeded max data per hour, retry later.");        
+        //_numTokens The number of tokens to be committed towards the target SpottedData
+        uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
+        address _selectedAddress = SelectAddressForUser(msg.sender, _numTokens);
         // -- woker flow checking
         updateUserSpotFlow(_selectedAddress); // first update the User SpotFlow Management System
         require(getUserPeriodSpotCount(_selectedAddress) < Parameters.get_SPOT_MAX_SPOT_PER_USER_PER_PERIOD(), "User limit: exceeded max data per hour, retry later.");        
@@ -996,8 +1057,6 @@ contract DataSpotting is Ownable, RandomAllocator {
   
         
         // ---  Master/SubWorker Stake Management        
-        //_numTokens The number of tokens to be committed towards the target SpottedData
-        uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
         // if tx sender has a master, then interact with his master's stake, or himself
         if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
             uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
@@ -1038,7 +1097,7 @@ contract DataSpotting is Ownable, RandomAllocator {
             DataNonce = DataNonce + 1;
             GlobalSpotFlowManager[GlobalSpotFlowManager.length-1].counter += 1;       
             TimeframeCounter[NB_TIMEFRAMES] storage UserSpotFlowManager = WorkersSpotFlowManager[_selectedAddress];
-            UserSpotFlowManager[GlobalSpotFlowManager.length-1].counter += 1;  
+            UserSpotFlowManager[UserSpotFlowManager.length-1].counter += 1;  
 
             // ---- TRIGGER UPDATES ON ALL SYSTEMS ---- : DataSpotting() is the source of rythm in the WorkSystems pipeline
             TriggerUpdate();           
@@ -1090,7 +1149,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         // ---  Master/SubWorker Stake Management        
         //_numTokens The number of tokens to be committed towards the target SpottedData
         uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
-        address _selectedAddress = SelectAddressForUser(msg.sender);
+        address _selectedAddress = SelectAddressForUser(msg.sender, _numTokens);
         // if tx sender has a master, then interact with his master's stake, or himself
         if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
             uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
