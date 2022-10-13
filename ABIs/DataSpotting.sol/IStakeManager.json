@@ -6,6 +6,44 @@
     {
       "inputs": [
         {
+          "internalType": "address",
+          "name": "_stakeholder",
+          "type": "address"
+        }
+      ],
+      "name": "AllocatedStakedAmountOf",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_stakeholder",
+          "type": "address"
+        }
+      ],
+      "name": "AvailableStakedAmountOf",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "uint256",
           "name": "_StakeAllocation",
           "type": "uint256"
