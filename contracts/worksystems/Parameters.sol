@@ -20,10 +20,10 @@ contract Parameters is Ownable {
     uint256 public MAX_UPDATE_ITERATIONS  = 50;   
     uint256 public MAX_CONTRACT_STORED_BATCHES  = 200000;   
     //////////////// SPOTTING RELATED PARAMETERS
-    uint256 public SPOT_DATA_BATCH_SIZE = 1;
+    uint256 public SPOT_DATA_BATCH_SIZE = 5;
     uint256 public SPOT_MIN_STAKE = 25 * (10 ** 18); 
     uint256 public SPOT_MIN_CONSENSUS_WORKER_COUNT  = 2;   
-    uint256 public SPOT_MAX_CONSENSUS_WORKER_COUNT  = 4;
+    uint256 public SPOT_MAX_CONSENSUS_WORKER_COUNT  = 10;
     uint256 public SPOT_COMMIT_ROUND_DURATION = 180;
     uint256 public SPOT_REVEAL_ROUND_DURATION = 180;       
     uint256 public SPOT_MIN_REWARD_SpotData = 1 * (10 ** 15);
@@ -31,7 +31,7 @@ contract Parameters is Ownable {
     uint256 public SPOT_MIN_REWARD_DataValidation = 1 * (10 ** 15);
     uint256 public SPOT_MIN_REP_DataValidation  = 10 * (10 ** 15);
     // SPOT DATA LIMITATIONS
-    uint256 public SPOT_INTER_ALLOCATION_DURATION = 400;
+    uint256 public SPOT_INTER_ALLOCATION_DURATION = 5;
     bool public SPOT_TOGGLE_ENABLED = true;
     uint256 public SPOT_TIMEFRAME_DURATION  = 15*60; //15 minutes
     uint256 public SPOT_GLOBAL_MAX_SPOT_PER_PERIOD  = 1000;

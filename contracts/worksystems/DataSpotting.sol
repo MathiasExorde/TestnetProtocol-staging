@@ -184,8 +184,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./RandomAllocator.sol";
 
 /**
-@title WorkSystem Spot v0.2
-@author Mathias Dail
+@title WorkSystem Spot v1.3.0
+@author Mathias Dail - CTO @ Exorde Labs
 */
 contract DataSpotting is Ownable, RandomAllocator {
 
@@ -248,7 +248,6 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     // ------ Worker State Structure
     struct WorkerState {
-        address worker_address;                 // worker address
         uint256 allocated_work_batch;
         bool has_completed_work;
         uint256 succeeding_novote_count;     
@@ -256,6 +255,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         bool registered;
         bool unregistration_request;
         uint256 registration_date;       
+        uint256 allocated_batch_counter;       
         uint256 majority_counter;              
         uint256 minority_counter;
         // TimeframeCounter[] spotflow_manager;
@@ -325,7 +325,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     address[] public availableWorkers;
     address[] public busyWorkers;   
     address[] public toUnregisterWorkers;   
-    uint256 LastRandomSeed = 0;
+    uint256 public LastRandomSeed = 0;
 
     // ------ Processes counters
     uint256 public DataNonce = 0;   
@@ -468,7 +468,6 @@ contract DataSpotting is Ownable, RandomAllocator {
                 break;
             }
         }
-        // require(found, "not found when PopFromBusyWorkers");
         if(found){
             busyWorkers[index] = busyWorkers[busyWorkers.length - 1];
             busyWorkers.pop();
@@ -580,7 +579,6 @@ contract DataSpotting is Ownable, RandomAllocator {
         if(!isInAvailableWorkers(msg.sender)){
             availableWorkers.push(msg.sender);
         }
-        worker_state.worker_address = msg.sender;
         worker_state.registered = true;
         worker_state.unregistration_request = false;
         worker_state.registration_date = block.timestamp;
@@ -596,16 +594,17 @@ contract DataSpotting is Ownable, RandomAllocator {
     function UnregisterWorker() public {
         WorkerState storage worker_state = WorkersState[msg.sender];
         require(worker_state.registered == true, "Worker is not registered so can't unregister");
-        if( worker_state.allocated_work_batch != 0 && worker_state.unregistration_request == false
-            && IsInLogoffList(msg.sender) == false ){
+        if(     worker_state.allocated_work_batch != 0  
+                && !worker_state.unregistration_request
+                && IsInLogoffList(msg.sender) == false ){                      
+            //////////////////////////////////
             worker_state.unregistration_request = true;
             toUnregisterWorkers.push(msg.sender);
         }
-        else if( worker_state.allocated_work_batch == 0){   // only unregister a worker if he is not working             
+        if( worker_state.allocated_work_batch == 0){   // only unregister a worker if he is not working             
             //////////////////////////////////
             PopFromAvailableWorkers(msg.sender);
             PopFromBusyWorkers(msg.sender);
-            worker_state.worker_address = msg.sender;
             worker_state.last_interaction_date = block.timestamp;
             worker_state.registered = false;
             emit _WorkerUnregistered(msg.sender, block.timestamp);
@@ -619,12 +618,13 @@ contract DataSpotting is Ownable, RandomAllocator {
         for (uint256 i = 0; i < toUnregisterWorkers.length; i++) {
             address worker_addr_ = toUnregisterWorkers[i];
             WorkerState storage worker_state = WorkersState[worker_addr_];
-            if (worker_state.registered &&  worker_state.allocated_work_batch == 0 ){
+            if ( worker_state.allocated_work_batch == 0 ){    
+                /////////////////////////////////
                 worker_state.registered = false;
                 worker_state.unregistration_request = false;
+                PopFromLogoffList(worker_addr_);
                 PopFromAvailableWorkers(worker_addr_);
                 PopFromBusyWorkers(worker_addr_);
-                PopFromLogoffList(worker_addr_);
                 emit _WorkerUnregistered(worker_addr_, block.timestamp);
             }
         }
@@ -673,10 +673,6 @@ contract DataSpotting is Ownable, RandomAllocator {
     // ----------------------------------------------------------------------------------
 
     function TriggerUpdate()  public {
-        // Log off waiting users first
-        if(toUnregisterWorkers.length > 0){
-            processLogoffRequests();
-        }
         // Update the Spot Flow System
         updateGlobalSpotFlow();
         // Delete old data if needed
@@ -684,13 +680,21 @@ contract DataSpotting is Ownable, RandomAllocator {
         // Then iterate as much as possible in the batches.
         for(uint256 i=0; i<Parameters.get_MAX_UPDATE_ITERATIONS() ;i++){
             bool progress = false;
+
             // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
             if( DataBatch[BatchCheckingCursor].allocated_to_work == true 
                 && ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
-                ValidateDataBatch(BatchCheckingCursor);            
+                // check if the batch is already validated, if so, move on & increment BatchCheckingCursor
+                if ( DataBatch[BatchCheckingCursor].checked == false ){
+                    ValidateDataBatch(BatchCheckingCursor);            
+                }
                 BatchCheckingCursor = BatchCheckingCursor.add(1);        
                 progress = true;
             }
+
+            // Log off waiting users first
+            processLogoffRequests();
+
             // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
             if( DataBatch[AllocatedBatchCursor].allocated_to_work != true
                 && availableWorkers.length >= Parameters.get_SPOT_MIN_CONSENSUS_WORKER_COUNT()
@@ -798,8 +802,6 @@ contract DataSpotting is Ownable, RandomAllocator {
             bool has_worker_voted_ = UserChecksReveals[worker_addr_][_DataBatchId];  
 
             // Worker state update
-            //// because was busy a task, remove the worker from the busy pool
-            PopFromBusyWorkers(worker_addr_);
             WorkerState storage worker_state = WorkersState[worker_addr_];
 
             if(has_worker_voted_){
@@ -818,18 +820,14 @@ contract DataSpotting is Ownable, RandomAllocator {
 
                     address worker_master_addr_ = _AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
 
-                    require(_RepManager.mintReputationForWork(Parameters.get_SPOT_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in Validate, 1.a");
-                    require(_RewardManager.ProxyAddReward(Parameters.get_SPOT_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in Validate, 1.b");
+                    if( majorityBatchCount > 0 ){
+                        require(_RepManager.mintReputationForWork(Parameters.get_SPOT_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in Validate, 1.a");
+                        require(_RewardManager.ProxyAddReward(Parameters.get_SPOT_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in Validate, 1.b");
+                    }
                     worker_state.majority_counter += 1;       
                 }
                 else{                    
                     worker_state.minority_counter += 1;        
-                }
-                // mark worker back available, removed from the busy list, if the worker has not requested unregistration
-                if(worker_state.registered){ // only if the worker is still registered, of course.
-                    if(!isInAvailableWorkers(worker_addr_) && (worker_state.unregistration_request == false)){
-                        availableWorkers.push(worker_addr_);
-                    }
                 }
             }
             // if worker has not voted
@@ -842,7 +840,12 @@ contract DataSpotting is Ownable, RandomAllocator {
                 }
             }
             // General Worker State Update
-            worker_state.allocated_work_batch == 0;
+            worker_state.allocated_work_batch = 0;        
+            // mark worker back available, removed from the busy list
+            if(worker_state.registered && !isInAvailableWorkers(worker_addr_)){ // only if the worker is still registered, of course.
+                PopFromBusyWorkers(worker_addr_);
+                availableWorkers.push(worker_addr_);
+            }
         }
         // -------------------------------------------------------------
         // BATCH STATE UPDATE: mark it checked, final.
@@ -864,8 +867,11 @@ contract DataSpotting is Ownable, RandomAllocator {
                 IRewardManager _RewardManager = IRewardManager(Parameters.getRewardManager());
 
                 address spot_author_master_ = _AddressManager.FetchHighestMaster(spot_author_); // detect if it's a master address, or a subaddress
-                require(_RepManager.mintReputationForWork(Parameters.get_SPOT_MIN_REP_SpotData()*majorityBatchCount, spot_author_master_, ""), "could not reward REP in ValidateDataBatch, 2.a");
-                require(_RewardManager.ProxyAddReward(Parameters.get_SPOT_MIN_REWARD_SpotData()*majorityBatchCount, spot_author_master_), "could not reward token in ValidateDataBatch, 2.b");
+                
+                if( majorityBatchCount > 0 ){
+                    require(_RepManager.mintReputationForWork(Parameters.get_SPOT_MIN_REP_SpotData()*majorityBatchCount, spot_author_master_, ""), "could not reward REP in ValidateDataBatch, 2.a");
+                    require(_RewardManager.ProxyAddReward(Parameters.get_SPOT_MIN_REWARD_SpotData()*majorityBatchCount, spot_author_master_), "could not reward token in ValidateDataBatch, 2.b");
+                }
             }
 
             // UPDATE BATCH STATE
@@ -903,7 +909,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     /* 
     Allocate last data batch to be checked by K out N currently available workers.
      */
-    function AllocateWork() public  {        
+    function AllocateWork() internal  {        
         require(DataBatch[AllocatedBatchCursor].complete, "Can't allocate work, the current batch is not complete");
         require(DataBatch[AllocatedBatchCursor].allocated_to_work == false, "Can't allocate work, the current batch is already allocated");
         uint256 selected_k = Math.max( Math.min(availableWorkers.length, Parameters.get_SPOT_MAX_CONSENSUS_WORKER_COUNT()), Parameters.get_SPOT_MIN_CONSENSUS_WORKER_COUNT()); // pick at most CONSENSUS_WORKER_SIZE workers, minimum 1.
@@ -943,6 +949,7 @@ contract DataSpotting is Ownable, RandomAllocator {
                 ///// allocation
                 worker_state.allocated_work_batch = AllocatedBatchCursor;
                 worker_state.has_completed_work = false;
+                worker_state.allocated_batch_counter += 1;
                 emit _WorkAllocated(AllocatedBatchCursor, selected_worker_);
             }
             
@@ -958,7 +965,11 @@ contract DataSpotting is Ownable, RandomAllocator {
     function IsNewWorkAvailable(address user_) public view returns(bool) {
         bool new_work_available = false;
         WorkerState memory user_state =  WorkersState[user_];
-        if (user_state.has_completed_work == false && DataEnded(user_state.allocated_work_batch) == false ){
+        uint256 _currentUserBatch = user_state.allocated_work_batch;
+        if (   !user_state.has_completed_work
+            && !DataEnded(_currentUserBatch)
+            && !didCommit(user_, _currentUserBatch) 
+            && !commitPeriodOver(_currentUserBatch)){
             new_work_available = true;
         }
         return new_work_available;
@@ -968,7 +979,14 @@ contract DataSpotting is Ownable, RandomAllocator {
     /* Get newest work */
     function GetCurrentWork(address user_) public view returns(uint256) {
         WorkerState memory user_state =  WorkersState[user_];
-        return user_state.allocated_work_batch;
+        uint256 _currentUserBatch = user_state.allocated_work_batch;
+        // if user has failed to commit and commitPeriod is Over, then currentWork is "missed".
+        if (    !didCommit(user_, _currentUserBatch) 
+            &&  commitPeriodOver(_currentUserBatch) ){
+            _currentUserBatch = 0;
+        }
+
+        return _currentUserBatch;
     }
 
 
@@ -1231,10 +1249,12 @@ contract DataSpotting is Ownable, RandomAllocator {
         worker_state.has_completed_work = true;
         worker_state.last_interaction_date = block.timestamp;   
 
-        // PUT BACK THE WORKER AS AVAILABLE
-        PopFromBusyWorkers(msg.sender);
         if(worker_state.registered){ // only if the worker is still registered, of course.
-            if(!isInAvailableWorkers(msg.sender) && (worker_state.unregistration_request == false)){
+            // PUT BACK THE WORKER AS AVAILABLE
+            // Mark the current work back to 0, to allow worker to unregister before new work.
+            worker_state.allocated_work_batch = 0; 
+            PopFromBusyWorkers(msg.sender);
+            if(!isInAvailableWorkers(msg.sender)){
                 availableWorkers.push(msg.sender);
             }
         }
@@ -1326,21 +1346,6 @@ contract DataSpotting is Ownable, RandomAllocator {
     // --------------------------------------------------------------------------------------------------------------------------------------------------------
     // --------------------------------------------------------------------------------------------------------------------------------------------------------
 
-    // function _BatchgetIPFShashesForBatch(uint256 _DataBatchId_a, uint256 _DataBatchId_b){
-    //     require(_DataBatchId_a>0 && _DataBatchId_a<_DataBatchId_b,"Input boundaries are invalid");
-    //     BatchMetadata memory batch_ = DataBatch[_DataBatchId];
-    //     uint256 batch_size = batch_.counter;
-
-    //     string[] memory ipfs_hash_list = new string[](batch_size);
-
-    //     for(uint256 i=0; i < batch_size; i++){
-    //         uint256 k = batch_.start_idx + i;
-    //         string memory ipfs_hash_ = SpotsMapping[k].ipfs_hash;
-    //         ipfs_hash_list[i] = ipfs_hash_;
-    //     }
-
-    //     return ipfs_hash_list;
-    // }
 
     
     function getIPFShashesForBatch(uint256 _DataBatchId) public view returns (string[] memory)  {
@@ -1359,6 +1364,28 @@ contract DataSpotting is Ownable, RandomAllocator {
         return ipfs_hash_list;
     }
 
+
+    function getMultiBatchIPFShashes(uint256 _DataBatchId_a, uint256 _DataBatchId_b)  public view returns (string[] memory){
+        require(_DataBatchId_a>0 && _DataBatchId_a < _DataBatchId_b,"Input boundaries are invalid");
+        uint256 _ipfs_hash_count = 0;
+
+        for(uint256 batchI =_DataBatchId_a; batchI < _DataBatchId_b + 1; batchI++){
+            BatchMetadata memory batch_ = DataBatch[batchI];
+           _ipfs_hash_count += batch_.counter;
+        }
+        string[] memory ipfs_hash_list = new string[](_ipfs_hash_count);
+
+        for(uint256 batchI =_DataBatchId_a; batchI < _DataBatchId_b + 1; batchI++){
+            BatchMetadata memory batch_ = DataBatch[batchI];
+            for(uint256 i = 0; i < batch_.counter ; i++ ){
+                uint256 k = batch_.start_idx + i;
+                string memory ipfs_hash_ = SpotsMapping[k].ipfs_hash;
+                ipfs_hash_list[i] = ipfs_hash_;
+            }
+        }
+
+        return ipfs_hash_list;
+    }
 
     function getDomainsForBatch(uint256 _DataBatchId) public view returns (string[] memory)  {
         require(DataExists(_DataBatchId), "_DataBatchId must exist");
@@ -1598,6 +1625,39 @@ contract DataSpotting is Ownable, RandomAllocator {
         return !isExpired(DataBatch[_DataBatchId].commitEndDate) && (DataBatch[_DataBatchId].uncommited_workers > 0);
     }
 
+
+    /**
+    @notice Checks if the commit period is over
+    @dev Checks isExpired for the specified SpottedData's commitEndDate
+    @param _DataBatchId Integer identifier associated with target SpottedData
+    @return active Boolean indication of isCommitPeriodActive for target SpottedData
+    */
+    function commitPeriodOver(uint256 _DataBatchId) public view returns (bool active) {
+        if (DataExists(_DataBatchId) == false){
+            return false;
+        }
+        else{
+            // a commitPeriod is Over if : time has expired OR if revealPeriod for the same _DataBatchId is true
+            return isExpired(DataBatch[_DataBatchId].commitEndDate) || revealPeriodActive(_DataBatchId);
+        }
+    }
+
+    /**
+    @notice Checks if the commit period is still active for the specified SpottedData
+    @dev Checks isExpired for the specified SpottedData's commitEndDate
+    @param _DataBatchId Integer identifier associated with target SpottedData
+    @return remainingTime Integer
+    */
+    function remainingCommitDuration(uint256 _DataBatchId) public view returns (uint256 remainingTime) {
+        require(DataExists(_DataBatchId), "_DataBatchId must exist");
+        uint256 _remainingTime = 0;
+        if( commitPeriodActive(_DataBatchId) ){
+            _remainingTime = DataBatch[_DataBatchId].commitEndDate - block.timestamp;
+        }
+        return _remainingTime;
+    }
+
+
     /**
     @notice Checks if the reveal period is still active for the specified SpottedData
     @dev Checks isExpired for the specified SpottedData's revealEndDate
@@ -1607,6 +1667,36 @@ contract DataSpotting is Ownable, RandomAllocator {
         require(DataExists(_DataBatchId), "_DataBatchId must exist");
 
         return !isExpired(DataBatch[_DataBatchId].revealEndDate) && !commitPeriodActive(_DataBatchId);
+    }
+    
+    /**
+    @notice Checks if the reveal period is over
+    @dev Checks isExpired for the specified SpottedData's revealEndDate
+    @param _DataBatchId Integer identifier associated with target SpottedData
+    */
+    function revealPeriodOver(uint256 _DataBatchId) public view returns (bool active) {
+        if (DataExists(_DataBatchId) == false){
+            return false;
+        }
+        else{
+            // a commitPeriod is Over if : time has expired OR if revealPeriod for the same _DataBatchId is true
+            return isExpired(DataBatch[_DataBatchId].revealEndDate) || DataBatch[_DataBatchId].unrevealed_workers == 0;
+        }
+    }
+    
+    /**
+    @notice Checks if the commit period is still active for the specified SpottedData
+    @dev Checks isExpired for the specified SpottedData's commitEndDate
+    @param _DataBatchId Integer identifier associated with target SpottedData
+    @return remainingTime Integer indication of isCommitPeriodActive for target SpottedData
+    */
+    function remainingRevealDuration(uint256 _DataBatchId) public view returns (uint256 remainingTime) {
+        require(DataExists(_DataBatchId), "_DataBatchId must exist");
+        uint256 _remainingTime = 0;
+        if( revealPeriodActive(_DataBatchId) ){
+            _remainingTime = DataBatch[_DataBatchId].revealEndDate - block.timestamp;
+        }
+        return _remainingTime;
     }
 
     /**

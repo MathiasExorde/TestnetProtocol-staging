@@ -141,7 +141,10 @@ interface IParametersManager {
 interface IStakeManager {
     function ProxyStakeAllocate(uint256 _StakeAllocation, address _stakeholder) external returns(bool);
     function ProxyStakeDeallocate(uint256 _StakeToDeallocate, address _stakeholder) external returns(bool);
+    function AvailableStakedAmountOf(address _stakeholder) external view returns(uint256);
+    function AllocatedStakedAmountOf(address _stakeholder) external view returns(uint256);
 }
+
 
 interface IRepManager {
     function mintReputationForWork(uint256 _amount, address _beneficiary, bytes32) external returns (bool);    
@@ -220,8 +223,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./RandomAllocator.sol";
 
 /**
-@title WorkSystem Compliance v0.2
-@author Mathias Dail
+@title WorkSystem Compliance v1.3.0
+@author Mathias Dail - CTO @ Exorde Labs
 */
 contract DataCompliance is Ownable, RandomAllocator {
 
@@ -276,7 +279,6 @@ contract DataCompliance is Ownable, RandomAllocator {
     
     // ------ Worker State Structure
     struct WorkerState {
-        address worker_address;                 // worker address
         uint256 allocated_work_batch;
         bool has_completed_work;
         uint256 succeeding_novote_count;           
@@ -602,7 +604,6 @@ contract DataCompliance is Ownable, RandomAllocator {
         if(!isInAvailableWorkers(msg.sender)){
             availableWorkers.push(msg.sender);
         }
-        worker_state.worker_address = msg.sender;
         worker_state.registered = true;
         worker_state.unregistration_request = false;
         worker_state.registration_date = block.timestamp;
@@ -624,7 +625,6 @@ contract DataCompliance is Ownable, RandomAllocator {
             //////////////////////////////////
             PopFromAvailableWorkers(msg.sender);
             PopFromBusyWorkers(msg.sender);
-            worker_state.worker_address = msg.sender;
             worker_state.last_interaction_date = block.timestamp;
             worker_state.registered = false;
             emit _WorkerUnregistered(msg.sender, block.timestamp);
@@ -870,8 +870,13 @@ contract DataCompliance is Ownable, RandomAllocator {
         DataBatch[_DataBatchId].item_count = majorityBatchCount;
 
         // -------------------------------------------------------------
+        // ASSESS VOTE RESULT AND REWARD USERS ACCORDINGLY 
+        // IMPORTANT: AND IF MAJORITY EXISTS
+        bool isCheckPassed = isPassed(_DataBatchId) && (AreStringsEqual(majorityNewFile,"") == false) && (majorityBatchCount != 0) ;
+
+        // -------------------------------------------------------------
         // IF THE DATA BLOCK IS ACCEPTED, MARK IT THAT WAY
-        if(isPassed(_DataBatchId)){           
+        if(isCheckPassed){           
             DataBatch[_DataBatchId].status = DataStatus.APPROVED;
             AcceptedBatchsCounter += 1;
             // SEND THIS BATCH TO THIS ARCHIVE SYSTEM
