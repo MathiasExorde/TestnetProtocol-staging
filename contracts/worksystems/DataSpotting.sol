@@ -799,6 +799,11 @@ contract DataSpotting is Ownable, RandomAllocator {
         // ASSESS VOTE RESULT AND REWARD USERS ACCORDINGLY 
         // IMPORTANT: AND IF MAJORITY EXISTS
         bool isCheckPassed = isPassed(_DataBatchId) && (AreStringsEqual(majorityNewFile,"") == false) && (majorityBatchCount != 0) ;
+        // handle the fail case:
+        // make majorityBatchCount 100 for that case, for the rewards.
+        if(!isCheckPassed){
+            majorityBatchCount = 100;
+        }
 
         //-------- ADD MAX BATCH COUNT CHECK MECHANIM HERE? In case of abuse?
 
@@ -978,7 +983,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
         return new_work_available;
     }
-
+    
 
     /* Get newest work */
     function GetCurrentWork(address user_) public view returns(uint256) {
