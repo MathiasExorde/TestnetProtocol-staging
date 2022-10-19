@@ -843,7 +843,7 @@ contract DataSpotting is Ownable, RandomAllocator {
             }
             // if worker has not voted
             else{                      
-                WorkersState[worker_addr_].succeeding_novote_count += 1;// worker has not voted, increase the counter
+                WorkersState[worker_addr_].succeeding_novote_count += 1; // worker has not voted, increase the succeeding_novote_count counter
                 /// --- FORCE LOG OFF USER IF HAS NOT VOTED MULTIPLE TIMES IN A ROW (INACTIVE OR LOCAL ISSUE, BETTER STOP THE DAMAGE SOONER THAN LATER/NEVER)
                 if(WorkersState[worker_addr_].succeeding_novote_count >= Parameters.get_MAX_SUCCEEDING_NOVOTES()){
                     worker_state.registered = false;
