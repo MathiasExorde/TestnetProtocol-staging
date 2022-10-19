@@ -49,8 +49,8 @@ import tkinter as tk
 from tkinter import ttk
 import tkinter.messagebox
 import tldextract
-import transformers
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, TFAutoModelForSequenceClassification
+# import transformers
+# from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoConfig, TFAutoModelForSequenceClassification
 import unicodedata
 import urllib.request
 import warnings
