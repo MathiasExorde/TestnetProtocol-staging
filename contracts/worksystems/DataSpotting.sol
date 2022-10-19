@@ -585,6 +585,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         }        
         //////////////////////////////////
         
+        PushInAvailableWorkers(msg.sender);
+
         worker_state.registered = true;
         worker_state.unregistration_request = false;
         worker_state.registration_date = block.timestamp;
