@@ -258,7 +258,6 @@ contract DataSpotting is Ownable, RandomAllocator {
         uint256 allocated_batch_counter;       
         uint256 majority_counter;              
         uint256 minority_counter;
-        // TimeframeCounter[] spotflow_manager;
     }
     
     // ------ Data batch Structure
@@ -451,7 +450,6 @@ contract DataSpotting is Ownable, RandomAllocator {
                 break;
             }
         }
-        // require(found, "not found when PopFromAvailableWorkers");
         if(found){
             availableWorkers[index] = availableWorkers[availableWorkers.length - 1];
             availableWorkers.pop();
@@ -474,6 +472,18 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
     }
 
+    function PushInAvailableWorkers(address _worker) internal{    
+        if(!isInAvailableWorkers(_worker)){
+            availableWorkers.push(_worker);
+        }
+    }
+
+    function PushInBusyWorkers(address _worker) internal{    
+        if(!isInBusyWorkers(_worker)){
+            busyWorkers.push(_worker);
+        }
+    }
+    
     
     function PopFromLogoffList(address _worker) internal{
         uint256 index = 0;
@@ -555,7 +565,8 @@ contract DataSpotting is Ownable, RandomAllocator {
     function RegisterWorker() public {
         WorkerState storage worker_state = WorkersState[msg.sender];
         require((availableWorkers.length+busyWorkers.length) < Parameters.getMaxTotalWorkers(), "Maximum registered workers already");
-        require(worker_state.registered == false, "Worker is already registered");        
+        require( !worker_state.registered, "Worker is already registered (1)");
+        require( !isInAvailableWorkers(msg.sender) && !isInBusyWorkers(msg.sender), "Worker is already registered (2)");
         // require worker to NOT have NOT VOTED MAX_SUCCEEDING_NOVOTES times in a row. If so, he has to wait NOVOTE_REGISTRATION_WAIT_DURATION
         require(    !( // NOT
                     worker_state.succeeding_novote_count >= Parameters.get_MAX_SUCCEEDING_NOVOTES()
@@ -571,14 +582,9 @@ contract DataSpotting is Ownable, RandomAllocator {
         if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
             uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
             requestAllocatedStake(remainder, _selectedAddress);
-        }
-        
-        // make sure msg.sender has enough voting rights
-        require(SystemStakedTokenBalance[msg.sender] >= _numTokens, "Worker has not enough (_numTokens) in his SystemStakedTokenBalance ");
+        }        
         //////////////////////////////////
-        if(!isInAvailableWorkers(msg.sender)){
-            availableWorkers.push(msg.sender);
-        }
+        
         worker_state.registered = true;
         worker_state.unregistration_request = false;
         worker_state.registration_date = block.timestamp;
@@ -794,7 +800,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         // IMPORTANT: AND IF MAJORITY EXISTS
         bool isCheckPassed = isPassed(_DataBatchId) && (AreStringsEqual(majorityNewFile,"") == false) && (majorityBatchCount != 0) ;
 
-        // ADD MAX BATCH COUNT HERE
+        //-------- ADD MAX BATCH COUNT CHECK MECHANIM HERE? In case of abuse?
 
         for (uint256 i = 0; i < allocated_workers_.length; i++) {
             address worker_addr_ = allocated_workers_[i];
@@ -833,7 +839,8 @@ contract DataSpotting is Ownable, RandomAllocator {
             // if worker has not voted
             else{                      
                 WorkersState[worker_addr_].succeeding_novote_count += 1;// worker has not voted, increase the counter
-                if(WorkersState[worker_addr_].succeeding_novote_count == Parameters.get_MAX_SUCCEEDING_NOVOTES()){ // only if the worker is still registered
+                /// --- FORCE LOG OFF USER IF HAS NOT VOTED MULTIPLE TIMES IN A ROW (INACTIVE OR LOCAL ISSUE, BETTER STOP THE DAMAGE SOONER THAN LATER/NEVER)
+                if(WorkersState[worker_addr_].succeeding_novote_count >= Parameters.get_MAX_SUCCEEDING_NOVOTES()){
                     worker_state.registered = false;
                     PopFromAvailableWorkers(worker_addr_);
                     PopFromBusyWorkers(worker_addr_);
@@ -842,9 +849,9 @@ contract DataSpotting is Ownable, RandomAllocator {
             // General Worker State Update
             worker_state.allocated_work_batch = 0;        
             // mark worker back available, removed from the busy list
-            if(worker_state.registered && !isInAvailableWorkers(worker_addr_)){ // only if the worker is still registered, of course.
+            if(worker_state.registered){ // only if the worker is still registered, of course.
                 PopFromBusyWorkers(worker_addr_);
-                availableWorkers.push(worker_addr_);
+                PushInAvailableWorkers(worker_addr_);
             }
         }
         // -------------------------------------------------------------
@@ -942,9 +949,7 @@ contract DataSpotting is Ownable, RandomAllocator {
                 ///// worker swapping from available to busy, not to be picked again while working.            
                 
                 PopFromAvailableWorkers(selected_worker_);
-                if(!isInBusyWorkers(selected_worker_)){
-                    busyWorkers.push(selected_worker_); //set worker as busy
-                }
+                PushInBusyWorkers(selected_worker_);  //set worker as busy
                 WorkersPerBatch[AllocatedBatchCursor].push(selected_worker_);
                 ///// allocation
                 worker_state.allocated_work_batch = AllocatedBatchCursor;
@@ -968,7 +973,6 @@ contract DataSpotting is Ownable, RandomAllocator {
         uint256 _currentUserBatch = user_state.allocated_work_batch;
         if (   !user_state.has_completed_work
             && !DataEnded(_currentUserBatch)
-            && !didCommit(user_, _currentUserBatch) 
             && !commitPeriodOver(_currentUserBatch)){
             new_work_available = true;
         }
@@ -1254,9 +1258,7 @@ contract DataSpotting is Ownable, RandomAllocator {
             // Mark the current work back to 0, to allow worker to unregister before new work.
             worker_state.allocated_work_batch = 0; 
             PopFromBusyWorkers(msg.sender);
-            if(!isInAvailableWorkers(msg.sender)){
-                availableWorkers.push(msg.sender);
-            }
+            PushInAvailableWorkers(msg.sender);
         }
 
         // Move directly to Validation if everyone revealed.
@@ -1292,14 +1294,14 @@ contract DataSpotting is Ownable, RandomAllocator {
     @notice Withdraw _numTokens ERC20 tokens from the voting contract, revoking these voting rights
     @param _numTokens The number of ERC20 tokens desired in exchange for voting rights
     */
-    function withdrawVotingRights(uint256 _numTokens) public {
-        uint256 availableTokens = SystemStakedTokenBalance[msg.sender].sub(getLockedTokens(msg.sender));
+    function withdrawVotingRights(uint256 _numTokens, address _user) public {
+        uint256 availableTokens = SystemStakedTokenBalance[_user].sub(getLockedTokens(_user));
         require(availableTokens >= _numTokens, "availableTokens should be >= _numTokens");
                 
         IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
-        require(_StakeManager.ProxyStakeDeallocate(_numTokens, msg.sender), "Could not withdrawVotingRights through ProxyStakeDeallocate");
-        SystemStakedTokenBalance[msg.sender] -= _numTokens;
-        emit _VotingRightsWithdrawn(_numTokens, msg.sender);
+        require(_StakeManager.ProxyStakeDeallocate(_numTokens, _user), "Could not withdrawVotingRights through ProxyStakeDeallocate");
+        SystemStakedTokenBalance[_user] -= _numTokens;
+        emit _VotingRightsWithdrawn(_numTokens, _user);
     }
 
     
@@ -1375,12 +1377,14 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
         string[] memory ipfs_hash_list = new string[](_ipfs_hash_count);
 
+        uint256 c = 0;
         for(uint256 batchI =_DataBatchId_a; batchI < _DataBatchId_b + 1; batchI++){
             BatchMetadata memory batch_ = DataBatch[batchI];
             for(uint256 i = 0; i < batch_.counter ; i++ ){
                 uint256 k = batch_.start_idx + i;
                 string memory ipfs_hash_ = SpotsMapping[k].ipfs_hash;
-                ipfs_hash_list[i] = ipfs_hash_;
+                ipfs_hash_list[c] = ipfs_hash_;
+                c += 1;
             }
         }
 
