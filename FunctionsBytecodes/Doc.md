@@ -1,3 +1,4 @@
+
 # Exorde Protocol Documentation!
 
 **Protocol Interactions & Rules**.
@@ -77,9 +78,9 @@ Participating in the Validation is done with a commit-reveal scheme.
  - **commitSpotCheck(uint256  _DataBatchId, bytes32  _encryptedHash, bytes32  _encryptedVote, uint256  _BatchCount, string  memory  _From)**
 - **revealSpotCheck(uint256  _DataBatchId, string  memory  _clearIPFSHash, uint256  _clearVote, uint256  _salt)**
 
-**Participating has requirements.**
+## **Staking requirements**
 
- The sender must have either:
+ The worker who wants to participate in the Exorde Protocol must have either:
 1.  **Already enough Stake allocated** in this specific WorkSystem ( *SystemStakedTokenBalance(address)* )
 2.  **Enough AvailableStake on StakingManager**, or have a Master/Main who has enough AvailableStake, in order for the WorkSystem to automatically ask the StakingManager for some Stake to get allocated.
 
@@ -92,3 +93,69 @@ If not enough AvailableStake (and nothing staked in the WorkSystem already), an 
 
 
 *All numbers must be divided by 10^18 to be displayed. 100000000000000000000 = 100 EXDT (or 100 REP).*
+
+
+## WorkSystems ConfigRegistry
+
+Parameters of the participation module itself are on the blockchain, on the ConfigRegistry.
+The Config Registry is a mapper, that takes a **string** as input, and gives a string as output.
+[Important] The output must be casted/formatted depending on what is used on the software it self.
+
+The list of ConfigRegistry Parameters are as follows:
+
+ 1. autoScrapingFrequency 
+ 2. lastInfo 
+ 3. version
+ 4. _ModuleMinSpotBatchSize 
+ 5. SpotBucket 
+ 6. spammerList
+ 7. SpotcheckBucket
+
+["_moduleHashContracts","_moduleHashSpotting","_moduleHashSpotChecking","_moduleHashApp"]
+
+
+Currently, ConfigRegistry & Parameters can seem redundant but they are not: Parameters is for the parameters of the data processing pipelines (inside the protocol), ConfigRegistry sets the hyper-parameters of Exorde, outside of the Protocol. These parameters are for the participation software (or module). For instance, _ModuleMinSpotBatchSize  is the hyper-parameter deciding the minimum item count (number of URL/content in a file, stored in IPFS) before sumbitting the file during SpotData().
+
+
+## DataSpotting Spotter Worker LifeCycle
+
+Spotting data is simple, as long as you have enough staked, you can spot as much as you want.
+There are 2 rate-limitations systems in the protocol:
+
+- **User Rate Limitation**: Users can submit only N spots (a spot is a file containing >= _ModuleMinSpotBatchSize  URL items). N is set by Parameters and can be adjusted dynamically be the protocol governance itself & external watcher programs. This rate limitation system is sliding on a period of 1h.
+- **Global Rate Limitation**: Similarly to the previous system, there is a global cap on the amount of spots submittable in the current period.
+
+Both systems are capping the amount of spots per hours. The period is a sliding windows of 1 hour.
+
+The protocol structures the stream in Data Batches, made of N spots. This N is dynamically adjusted over time. Data batches are identified by an integer (>= 1). There is no Batch 0, it is used only to represent the "no work" situation, or equivalent.
+
+## DataSpotting Validator Worker LifeCycle
+
+### Protocol Validation System
+
+**Validating data is a sequential process:**
+
+ 1. A worker address signal itself available, for work as a validator, by **registering**. **Register()** has no arguments.
+ 2. A worker signal tiself unavailable by **unregistering**. Unregistration only happens when the worker has completed its current task (if any). **Unregister()** has no arguments either.
+
+*Requirements: like Spotting, Validating requires a Stake, as described in Staking requirement.*
+
+The Exorde Protocol works by splitting the input data streams in Data batches. Each Batch is a set of IPFS Files (>= 1), containing data that is properly formatted in a json structure. 
+
+#### Validation Principles:
+1. A worker processes a single Batch ID (a job) at a time. A worker can only vote on a batch that has been allocated to him.
+2. A worker will remain registered if he continues to work properly, and will continue to get allocated some work (if available).
+3. A worker can be unregistered by the protocol, and prevented from re-registering before a given duration (set in Parameters). This is similar to a "kick" mechanism. This can happen if the worker is not participating multiple times in a row, hurting the protocol mechanisms & the integrity of the data validation system.**
+5. Participating is done by voting, and voting is done via commit-reveal schemes.**
+6. Commiting and revealing are performed in rounds, and each round has a timer. If a worker fails to commit or reveal (or commit but not reveal), this participation will be considered null and the worker will be punished (& not rewarded)
+7. Being rewarded depends on being in the majority during the validation consensus
+
+### Participation Procedure
+
+Workers, when **registered**, **must follow this participation algorithm**:
+
+a. Periodically check **IsNewWorkAvailable(address)**. If this call returns **true**, then a job (a Batch ID) is available and can be worked on immediately.
+b. The new job can fetched by calling **GetCurrentWork(address)**, returning a Batch ID. If called when no job is allocated, GetCurrentWork() returns 0.
+.....
+
+*The address argument in the function above must be the worker address, not the Main/Master address.*
