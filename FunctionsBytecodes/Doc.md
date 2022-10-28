@@ -159,3 +159,105 @@ b. The new job can fetched by calling **GetCurrentWork(address)**, returning a B
 .....
 
 *The address argument in the function above must be the worker address, not the Main/Master address.*
+
+
+
+# Function list
+
+## DataSpotting
+### **Read only - Call() functions:**
+**Process functions:** 
+ - IsNewWorkAvailable(address  user_) returns (bool)
+ - GetCurrentWork(address  user_) returns (uint256) 
+ - getIPFShashesForBatch(uint256  _DataBatchId) returns (string[])
+ - getMultiBatchIPFShashes(uint256  _batchIndexA, uint256 _batchIndexB) returns (string[])
+ - getBatchCountForBatch(uint256  _DataBatchId_a, uint256  _DataBatchId_b) returns (uint256 AverageURLCount, uint256[]  batchCounts)
+ - getFromsForBatch(uint256  _DataBatchId) public  view  returns (string[])
+ - getVotesForBatch(uint256  _DataBatchId) public  view  returns (uint256[])
+ - getSubmittedFilesForBatch(uint256  _DataBatchId) public  view  returns (string[])
+ - getBatchByID() returns (BatchMetadata)
+ - isPassed(uint256  _DataBatchId) public  view  returns (bool)
+ - DataEnded(uint256  _DataBatchId) returns (bool)
+
+**Commit & reveal period related getters:** 
+
+ - DataCommitEndDate(uint256  _DataBatchId) returns (uint256)
+ - DataRevealEndDate(uint256  _DataBatchId) returns (uint256)
+ - commitPeriodActive(uint256  _DataBatchId) returns (bool)
+ - revealPeriodActive(uint256  _DataBatchId) returns (bool)
+ - commitPeriodOver(uint256  _DataBatchId) returns (bool)
+ - revealPeriodActive(uint256  _DataBatchId) returns (bool)
+ - revealPeriodOver(uint256  _DataBatchId) returns (bool)
+ - remainingCommitDuration(uint256  _DataBatchId) returns (uint256)
+ - remainingRevealDuration(uint256  _DataBatchId) returns (uint256)
+ - didCommit(address  _voter, uint256  _DataBatchId)  returns (bool)
+ - didReveal(address  _voter, uint256  _DataBatchId)  returns (bool)
+
+**Worker related getters:** 
+ - AmIRegistered() returns (bool)
+ - isWorkerRegistered(address  _worker)  returns (bool)
+ - getEncryptedHash(uint256  _clearVote, uint256  _salt) returns (bytes32  keccak256hash)
+ - getEncryptedStringHash(string  memory  _hash, uint256  _salt) returns (bytes32  keccak256hash)
+ - isWorkerAllocatedToBatch(uint256  _DataBatchId, address  _worker) returns (bool)
+ - SelectAddressForUser(address  _worker, uint256  _TokensAmountToAllocate) returns (address)
+ - getGlobalPeriodSpotCount() returns(uint256) 
+ - getUserPeriodSpotCount(address  user_) returns(uint256) 
+ - getSystemTokenBalance(address  _user) returns(uint256) 
+ - getLockedTokens(address  _user) returns(uint256)
+
+**General Worksystem Statistics:**
+ - getAcceptedBatchesCount() returns (uint256) 
+ - getRejectedBatchesCount() returns (uint256) 
+ - getActiveWorkersCount() returns (uint256)
+ - getAvailableWorkersCount() returns (uint256)
+ - getBusyWorkersCount() returns (uint256)
+ - getLastDataId() returns (uint256)
+ - getLastBatchId() returns (uint256)
+ - getLastCheckedBatchId() returns (uint256)
+ - getLastAllocatedBatchId() returns (uint256)
+ - getLastBatchId() returns (uint256)
+ - getTxCounter()
+
+
+**State-modifiers - writers**
+
+ - RegisterWorker() 
+ - UnregisterWorker()
+ - commitSpotCheck(uint256 _DataBatchId, bytes32  _encryptedHash, bytes32  _encryptedVote, uint256  _BatchCount, string  memory  _From) 
+  - revealSpotCheck(uint256 _DataBatchId, string  memory  _clearIPFSHash, uint256  _clearVote, uint256  _salt)
+  - withdrawVotingRights(uint256 _numTokens, address  _user)
+  - rescueTokens(uint256  _DataBatchId)
+  
+Auxiliary process updaters: 
+- TriggerUpdate() (triggered in SpotData)
+- updateGlobalSpotFlow() (triggered in SpotData)
+- updateUserSpotFlow(address  user_) (triggered in SpotData)
+
+## StakingManager
+
+**AllocatedStakedAmountOf(address)
+AvailableStakedAmountOf(address)
+ProxyStakeAllocate(uint256,address)
+ProxyStakeDeallocate(uint256,address)
+Stake(uint256)
+TotalAllocatedStakes()
+TotalAvailableStakes()
+TotalStakes()
+addAddress(address)
+balances(address)
+closeAllStakes()
+deposit(uint256)
+isStakeWhitelisted(address)
+"isStakeholder(address)
+"isStakeholderIndex(address)
+"removeAddress(address)
+"withdraw(uint256)
+"withdrawAll()**
+
+## RewardsManager
+
+## AddressManager
+
+## Reputation
+
+## Controller
