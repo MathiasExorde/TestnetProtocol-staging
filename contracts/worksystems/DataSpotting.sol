@@ -1,32 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
-// File: attrstore/AttributeStore.sol
 
 pragma solidity 0.8.0;
-
-library AttributeStore {
-    struct SpottedData {
-        mapping(bytes32 => uint256) store;
-    }
-
-    function getAttribute(SpottedData storage self, bytes32  _UUID, string memory _attrName)
-    public view returns (uint256) {
-        
-        bytes32 key = keccak256(abi.encodePacked(_UUID, _attrName));
-        return self.store[key];
-    }
-
-    function setAttribute(SpottedData storage self, bytes32 _UUID, string memory _attrName, uint256 _attrVal)
-    public {
-        bytes32 key = keccak256(abi.encodePacked(_UUID, _attrName));
-        self.store[key] = _attrVal;
-    }
-}
 
 // File: dll/DLL.sol
 
 library DLL {
 
   uint256 constant NULL_NODE_ID = 0;
+
 
   struct Node {
     uint256 next;
@@ -184,7 +165,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./RandomAllocator.sol";
 
 /**
-@title WorkSystem Spot v1.3.0
+@title WorkSystem Spot v1.3.0.1
 @author Mathias Dail - CTO @ Exorde Labs
 */
 contract DataSpotting is Ownable, RandomAllocator {
@@ -215,7 +196,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     event _SpotSubmitted(uint256 indexed DataID, string file_hash, string URL_domain, address indexed sender);
     event _SpotCheckCommitted(uint256 indexed DataID, uint256 numTokens, address indexed voter);
     event _SpotCheckRevealed(uint256 indexed DataID, uint256 numTokens, uint256 votesFor, uint256 votesAgainst, uint256 indexed choice, address indexed voter);
-    event _SpotAccepted(string hash, address indexed creator);    
+    event _BatchValidated(uint256 indexed DataID, string file_hash, bool isVotePassed);    
     event _WorkAllocated(uint256 indexed batchID, address worker);
     event _WorkerRegistered(address indexed worker, uint256 timestamp);
     event _WorkerUnregistered(address indexed worker, uint256 timestamp);
@@ -227,9 +208,12 @@ contract DataSpotting is Ownable, RandomAllocator {
     event BytesFailure(bytes bytesFailure);
 
     // ============ LIBRARIES ============
-    using AttributeStore for AttributeStore.SpottedData;
+    // using AttributeStore for AttributeStore.SpottedData;
     using DLL for DLL.SpottedData;
     using SafeMath for uint256;    
+
+
+
 
     // ============ DATA STRUCTURES ============
     // ------ Spot-flow related structure
@@ -249,7 +233,6 @@ contract DataSpotting is Ownable, RandomAllocator {
     // ------ Worker State Structure
     struct WorkerState {
         uint256 allocated_work_batch;
-        bool has_completed_work;
         uint256 succeeding_novote_count;     
         uint256 last_interaction_date;  
         bool registered;
@@ -309,7 +292,8 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     // ------ Backend Data Stores
     mapping(address => DLL.SpottedData) dllMap;
-    AttributeStore.SpottedData store;
+    // AttributeStore.SpottedData store;
+    mapping(bytes32 => uint256) store;
     mapping(uint256 => SpottedData) public SpotsMapping; // maps DataID to SpottedData struct
     mapping(uint256 => BatchMetadata) public DataBatch; // refers to SpottedData indices
     
@@ -380,6 +364,23 @@ contract DataSpotting is Ownable, RandomAllocator {
     onlyOwner
     {
         AllocatedBatchCursor = AllocatedBatchCursor_;
+    }
+    
+    // ----------------------------------------------------------------------------------
+    //                          Data Attribute Store
+    // ----------------------------------------------------------------------------------
+
+    function getAttribute(bytes32  _UUID, string memory _attrName)
+    public view returns (uint256) {
+        
+        bytes32 key = keccak256(abi.encodePacked(_UUID, _attrName));
+        return store[key];
+    }
+
+    function setAttribute(bytes32 _UUID, string memory _attrName, uint256 _attrVal)
+    public {
+        bytes32 key = keccak256(abi.encodePacked(_UUID, _attrName));
+        store[key] = _attrVal;
     }
 
     // ----------------------------------------------------------------------------------
@@ -816,10 +817,12 @@ contract DataSpotting is Ownable, RandomAllocator {
 
             // Worker state update
             WorkerState storage worker_state = WorkersState[worker_addr_];
+            dllMap[worker_addr_].remove(_DataBatchId); // remove the node referring to this spot-check-vote upon reveal
 
+            // ------- if worker has indeed voted (commited & revealed)
             if(has_worker_voted_){
                 // mark that worker has completed job, no matter the reward
-                WorkersState[worker_addr_].has_completed_work = true;                
+                      
                 WorkersState[worker_addr_].succeeding_novote_count = 0; // reset the novote counter
                 // then assess if worker is in the majority to reward him
                 if( (isCheckPassed == true && worker_vote_ == 1)
@@ -843,22 +846,22 @@ contract DataSpotting is Ownable, RandomAllocator {
                     worker_state.minority_counter += 1;        
                 }
             }
-            // if worker has not voted
+            // ------- if worker has not voted (commited or not but never revealed)
             else{                      
                 WorkersState[worker_addr_].succeeding_novote_count += 1; // worker has not voted, increase the succeeding_novote_count counter
                 /// --- FORCE LOG OFF USER IF HAS NOT VOTED MULTIPLE TIMES IN A ROW (INACTIVE OR LOCAL ISSUE, BETTER STOP THE DAMAGE SOONER THAN LATER/NEVER)
                 if(WorkersState[worker_addr_].succeeding_novote_count >= Parameters.get_MAX_SUCCEEDING_NOVOTES()){
                     worker_state.registered = false;
-                    PopFromAvailableWorkers(worker_addr_);
                     PopFromBusyWorkers(worker_addr_);
+                    PopFromAvailableWorkers(worker_addr_);
                 }
-            }
-            // General Worker State Update
-            worker_state.allocated_work_batch = 0;        
-            // mark worker back available, removed from the busy list
-            if(worker_state.registered){ // only if the worker is still registered, of course.
-                PopFromBusyWorkers(worker_addr_);
-                PushInAvailableWorkers(worker_addr_);
+                // ---- if worker has commit/revealed entirely, he is available again (revealing release workers), no need to pop/push.
+                // ---- if worker has not commit/revealed entirely aka not voted, then worker is still busy by definition, so pop from Busy back to Available 
+                if(worker_state.registered){ // only if the worker is still registered   
+                    PopFromBusyWorkers(worker_addr_);
+                    PushInAvailableWorkers(worker_addr_);
+                }
+                worker_state.allocated_work_batch = 0;      
             }
         }
         // -------------------------------------------------------------
@@ -902,6 +905,7 @@ contract DataSpotting is Ownable, RandomAllocator {
             } catch(bytes memory err) {
                 emit BytesFailure(err);
             }
+            
         }
         // -------------------------------------------------------------
         // IF THE DATA BLOCK IS REJECTED
@@ -914,8 +918,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         AllTxsCounter += 1;
         NotCommitedCounter += DataBatch[_DataBatchId].uncommited_workers;
         NotRevealedCounter += DataBatch[_DataBatchId].unrevealed_workers;
+        emit _BatchValidated(_DataBatchId, majorityNewFile, isCheckPassed);
 
-        emit _SpotAccepted(SpotsMapping[_DataBatchId].ipfs_hash, SpotsMapping[_DataBatchId].author);
     }
     
 
@@ -960,7 +964,6 @@ contract DataSpotting is Ownable, RandomAllocator {
                 WorkersPerBatch[AllocatedBatchCursor].push(selected_worker_);
                 ///// allocation
                 worker_state.allocated_work_batch = AllocatedBatchCursor;
-                worker_state.has_completed_work = false;
                 worker_state.allocated_batch_counter += 1;
                 emit _WorkAllocated(AllocatedBatchCursor, selected_worker_);
             }
@@ -978,7 +981,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         bool new_work_available = false;
         WorkerState memory user_state =  WorkersState[user_];
         uint256 _currentUserBatch = user_state.allocated_work_batch;
-        if (   !user_state.has_completed_work
+        if (   !didReveal(user_, _currentUserBatch)
             && !DataEnded(_currentUserBatch)
             && !commitPeriodOver(_currentUserBatch)){
             new_work_available = true;
@@ -1204,9 +1207,9 @@ contract DataSpotting is Ownable, RandomAllocator {
         bytes32 UUID = attrUUID(msg.sender, _DataBatchId);
         
         
-        store.setAttribute(UUID,  "numTokens", _numTokens);
-        store.setAttribute(UUID, "commitHash", uint256(_encryptedHash));
-        store.setAttribute(UUID, "commitVote", uint256(_encryptedVote));
+        setAttribute(UUID,  "numTokens", _numTokens);
+        setAttribute(UUID, "commitHash", uint256(_encryptedHash));
+        setAttribute(UUID, "commitVote", uint256(_encryptedVote));
 
         UserBatchCounts[_DataBatchId][msg.sender] = _BatchCount;
         UserBatchFrom[_DataBatchId][msg.sender] = _From;
@@ -1249,7 +1252,6 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
 
         // ----------------------- USER STATE UPDATE -----------------------
-        dllMap[msg.sender].remove(_DataBatchId); // remove the node referring to this spot-check-vote upon reveal
         UserChecksReveals[msg.sender][_DataBatchId] = true;
         UserVotes[_DataBatchId][msg.sender] = _clearVote;
         UserNewFiles[_DataBatchId][msg.sender] = _clearIPFSHash;
@@ -1257,7 +1259,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         // ----------------------- WORKER STATE UPDATE -----------------------
         WorkerState storage worker_state = WorkersState[msg.sender];
         DataBatch[_DataBatchId].unrevealed_workers = DataBatch[_DataBatchId].unrevealed_workers.sub(1);
-        worker_state.has_completed_work = true;
+        
         worker_state.last_interaction_date = block.timestamp;   
 
         if(worker_state.registered){ // only if the worker is still registered, of course.
@@ -1398,6 +1400,26 @@ contract DataSpotting is Ownable, RandomAllocator {
         return ipfs_hash_list;
     }
 
+    
+    function getBatchCountForBatch(uint256 _DataBatchId_a, uint256 _DataBatchId_b) public view returns (uint256 AverageURLCount, uint256[] memory batchCounts)  {
+        require(_DataBatchId_a>0 && _DataBatchId_a < _DataBatchId_b,"Input boundaries are invalid");
+        uint256 _total_batchs_count = 0;
+        uint256 _batch_amount = _DataBatchId_b -_DataBatchId_a + 1;
+
+        uint256[] memory _batch_counts_list = new uint256[](_batch_amount);
+
+        for(uint256 batchI =_DataBatchId_a; batchI < _DataBatchId_b + 1; batchI++){
+            BatchMetadata memory batch_ = DataBatch[batchI];
+            _total_batchs_count += batch_.item_count;
+            _batch_counts_list[batchI] = batch_.item_count;
+        }
+
+        uint256 _average_batch_count = _total_batchs_count / _batch_amount;
+        
+        return (_average_batch_count, _batch_counts_list);
+    }
+
+
     function getDomainsForBatch(uint256 _DataBatchId) public view returns (string[] memory)  {
         require(DataExists(_DataBatchId), "_DataBatchId must exist");
         BatchMetadata memory batch_ = DataBatch[_DataBatchId];
@@ -1438,6 +1460,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
         return votes_list;
     }
+
+    
 
     function getSubmittedFilesForBatch(uint256 _DataBatchId) public view returns (string[] memory)  {
         require(DataExists(_DataBatchId), "_DataBatchId must exist");
@@ -1766,7 +1790,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     @return commitHash Bytes32 hash property attached to target SpottedData
     */
     function getCommitVoteHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
-        return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitVote"));
+        return bytes32(getAttribute(attrUUID(_voter, _DataBatchId), "commitVote"));
     }
 
 
@@ -1777,7 +1801,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     @return commitHash Bytes32 hash property attached to target SpottedData
     */
     function getCommitIPFSHash(address _voter, uint256 _DataBatchId)  public view returns (bytes32 commitHash) {
-        return bytes32(store.getAttribute(attrUUID(_voter, _DataBatchId), "commitHash"));
+        return bytes32(getAttribute(attrUUID(_voter, _DataBatchId), "commitHash"));
     }
 
     /**
@@ -1808,7 +1832,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     @return numTokens Number of tokens committed to SpottedData in sorted SpottedData-linked-list
     */
     function getNumTokens(address _voter, uint256 _DataBatchId)  public view returns (uint256 numTokens) {
-        return store.getAttribute(attrUUID(_voter, _DataBatchId), "numTokens");
+        return getAttribute(attrUUID(_voter, _DataBatchId), "numTokens");
     }
 
     /**
