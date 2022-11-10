@@ -325,6 +325,13 @@ contract DataSpotting is Ownable, RandomAllocator {
     uint256 public NotCommitedCounter = 0;
     uint256 public NotRevealedCounter = 0;
 
+    // ------------ Testnet related
+
+    bool public InstantSpotRewards = true;
+    uint256 public InstantSpotRewardsDivider = 10;
+
+    uint256 public MaxPendingDataBatchCount = 100;
+
     // ------ Addresses & Interfaces
     IERC20 public token;
     IParametersManager public Parameters;
@@ -365,6 +372,25 @@ contract DataSpotting is Ownable, RandomAllocator {
     {
         AllocatedBatchCursor = AllocatedBatchCursor_;
     }
+
+    // enables rewards on spotdata
+    function updateInstantSpotRewards(bool state_, uint256 divider_)
+    public
+    onlyOwner
+    {
+        InstantSpotRewards = state_;
+        InstantSpotRewardsDivider = divider_;
+    }
+    
+
+    // enables rewards on spotdata
+    function updateMaxPendingDataBatch(uint256 MaxPendingDataBatchCount_)
+    public
+    onlyOwner
+    {
+        MaxPendingDataBatchCount = MaxPendingDataBatchCount_;
+    }
+    
     
     // ----------------------------------------------------------------------------------
     //                          Data Attribute Store
@@ -686,10 +712,9 @@ contract DataSpotting is Ownable, RandomAllocator {
         updateGlobalSpotFlow();
         // Delete old data if needed
         deleteOldData();
-        // Then iterate as much as possible in the batches.
+    
         for(uint256 i=0; i<Parameters.get_MAX_UPDATE_ITERATIONS() ;i++){
             bool progress = false;
-
             // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
             if( DataBatch[BatchCheckingCursor].allocated_to_work == true 
                 && ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
@@ -700,23 +725,29 @@ contract DataSpotting is Ownable, RandomAllocator {
                 BatchCheckingCursor = BatchCheckingCursor.add(1);        
                 progress = true;
             }
+        }
+        
+        // Log off waiting users first
+        processLogoffRequests();
 
-            // Log off waiting users first
-            processLogoffRequests();
-
-            // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
-            if( DataBatch[AllocatedBatchCursor].allocated_to_work != true
-                && availableWorkers.length >= Parameters.get_SPOT_MIN_CONSENSUS_WORKER_COUNT()
-                && DataBatch[AllocatedBatchCursor].complete
-                && LastRandomSeed !=  getRandom() // make sure randomness is refreshed
-                && ((block.timestamp - LastAllocationTime) >= Parameters.get_SPOT_INTER_ALLOCATION_DURATION() )){ //nothing to allocate, waiting for this to end
-                AllocateWork(); 
-                progress = true;
+        // Then iterate as much as possible in the batches.
+        if(  LastRandomSeed !=  getRandom() ){                
+            for(uint256 i=0; i<Parameters.get_MAX_UPDATE_ITERATIONS() ;i++){
+                bool progress = false;
+                // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
+                if( DataBatch[AllocatedBatchCursor].allocated_to_work != true
+                    && availableWorkers.length >= Parameters.get_SPOT_MIN_CONSENSUS_WORKER_COUNT()
+                    && DataBatch[AllocatedBatchCursor].complete
+                    && ((block.timestamp - LastAllocationTime) >= Parameters.get_SPOT_INTER_ALLOCATION_DURATION() )){ //nothing to allocate, waiting for this to end
+                    AllocateWork(); 
+                    progress = true;
+                }
+                if(!progress){
+                    // break from the loop if no more progress is made when iterating (no batch to validate, no work to allocate)
+                    break;
+                }
             }
-            if(!progress){
-                // break from the loop if no more progress is made when iterating (no batch to validate, no work to allocate)
-                break;
-            }
+        
         }
         _retrieveSFuel();
     }
@@ -1084,78 +1115,103 @@ contract DataSpotting is Ownable, RandomAllocator {
         address _selectedAddress = SelectAddressForUser(msg.sender, _numTokens);
         // -- woker flow checking
         updateUserSpotFlow(_selectedAddress); // first update the User SpotFlow Management System
-        require(getUserPeriodSpotCount(_selectedAddress) < Parameters.get_SPOT_MAX_SPOT_PER_USER_PER_PERIOD(), "User limit: exceeded max data per hour, retry later.");        
+        // require(getUserPeriodSpotCount(_selectedAddress) < Parameters.get_SPOT_MAX_SPOT_PER_USER_PER_PERIOD(), "User limit: exceeded max data per hour, retry later.");        
         // -----------------------------------------------------------------
   
-        
-        // ---  Master/SubWorker Stake Management        
-        // if tx sender has a master, then interact with his master's stake, or himself
-        if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
-            uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
-            requestAllocatedStake(remainder, _selectedAddress);
-        }
-        
-        // -----------------------------------------------------------------
-        // ---- Spot Batch Processing --------------------------------------
-        for(uint256 i=0; i < file_hashs.length; i++){
-            string memory file_hash = file_hashs[i];
-            string memory URL_domain_ = URL_domains[i];
-            UserSubmissions[msg.sender].push(DataNonce);
-
-            SpotsMapping[DataNonce] = SpottedData({
-                ipfs_hash: file_hash,
-                author: msg.sender,
-                timestamp: block.timestamp,
-                item_count: item_count_,
-                URL_domain: URL_domain_,
-                extra: extra_,
-                status: DataStatus.TBD
-            });
-
-            // UPDATE STREAMING DATA BATCH STRUCTURE
-            BatchMetadata storage current_data_batch = DataBatch[LastBatchCounter];
-            if(current_data_batch.counter < Parameters.get_SPOT_DATA_BATCH_SIZE()){
-                current_data_batch.counter += 1;
+        if (  getUserPeriodSpotCount(_selectedAddress) < Parameters.get_SPOT_MAX_SPOT_PER_USER_PER_PERIOD() 
+              && getGlobalPeriodSpotCount() < Parameters.get_SPOT_GLOBAL_MAX_SPOT_PER_PERIOD() 
+              && ( AllocatedBatchCursor - BatchCheckingCursor ) <= MaxPendingDataBatchCount){
+                    
+            // ---  Master/SubWorker Stake Management        
+            // if tx sender has a master, then interact with his master's stake, or himself
+            if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
+                uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
+                requestAllocatedStake(remainder, _selectedAddress);
             }
-            if(current_data_batch.counter >= Parameters.get_SPOT_DATA_BATCH_SIZE())
-            { // batch is complete trigger new work round, new batch
-                current_data_batch.complete = true;
-                current_data_batch.checked = false;
-                LastBatchCounter += 1;
-                DataBatch[LastBatchCounter].start_idx = DataNonce;
-            }
-
-            // Global state update - spot flow management: increase global sliding counter & user counter
-            DataNonce = DataNonce + 1;
-            GlobalSpotFlowManager[GlobalSpotFlowManager.length-1].counter += 1;       
-            TimeframeCounter[NB_TIMEFRAMES] storage UserSpotFlowManager = WorkersSpotFlowManager[_selectedAddress];
-            UserSpotFlowManager[UserSpotFlowManager.length-1].counter += 1;  
-
-            // ---- TRIGGER UPDATES ON ALL SYSTEMS ---- : DataSpotting() is the source of rythm in the WorkSystems pipeline
-            TriggerUpdate();           
-
-            IFollowingSystem _ComplianceSystem = IFollowingSystem(Parameters.getComplianceSystem());
-            try _ComplianceSystem.TriggerUpdate(){
-            } catch(bytes memory err) {
-                emit BytesFailure(err);
-            }
-            IFollowingSystem _IndexingSystem = IFollowingSystem(Parameters.getIndexingSystem());
-            try _IndexingSystem.TriggerUpdate(){
-            } catch(bytes memory err) {
-                emit BytesFailure(err);
-            }
-            IFollowingSystem _ArchivingSystem = IFollowingSystem(Parameters.getArchivingSystem());
-            try _ArchivingSystem.TriggerUpdate(){
-            } catch(bytes memory err) {
-                emit BytesFailure(err);
-            }
-
-            // ---- Emit event
-            emit _SpotSubmitted(DataNonce, file_hash, URL_domain_, _selectedAddress);
             
+            // -----------------------------------------------------------------
+            // ---- Spot Batch Processing --------------------------------------
+            for(uint256 i=0; i < file_hashs.length; i++){
+                string memory file_hash = file_hashs[i];
+                string memory URL_domain_ = URL_domains[i];
+                UserSubmissions[msg.sender].push(DataNonce);
+
+                SpotsMapping[DataNonce] = SpottedData({
+                    ipfs_hash: file_hash,
+                    author: msg.sender,
+                    timestamp: block.timestamp,
+                    item_count: item_count_,
+                    URL_domain: URL_domain_,
+                    extra: extra_,
+                    status: DataStatus.TBD
+                });
+
+                // UPDATE STREAMING DATA BATCH STRUCTURE
+                BatchMetadata storage current_data_batch = DataBatch[LastBatchCounter];
+                if(current_data_batch.counter < Parameters.get_SPOT_DATA_BATCH_SIZE()){
+                    current_data_batch.counter += 1;
+                }
+                if(current_data_batch.counter >= Parameters.get_SPOT_DATA_BATCH_SIZE())
+                { // batch is complete trigger new work round, new batch
+                    current_data_batch.complete = true;
+                    current_data_batch.checked = false;
+                    LastBatchCounter += 1;
+                    DataBatch[LastBatchCounter].start_idx = DataNonce;
+                }
+
+                // Global state update - spot flow management: increase global sliding counter & user counter
+                DataNonce = DataNonce + 1;
+                GlobalSpotFlowManager[GlobalSpotFlowManager.length-1].counter += 1;       
+                TimeframeCounter[NB_TIMEFRAMES] storage UserSpotFlowManager = WorkersSpotFlowManager[_selectedAddress];
+                UserSpotFlowManager[UserSpotFlowManager.length-1].counter += 1;  
+
+                // ---- TRIGGER UPDATES ON ALL SYSTEMS ---- : DataSpotting() is the source of rythm in the WorkSystems pipeline
+                TriggerUpdate();           
+
+                
+                if ( InstantSpotRewards == true ){
+
+                    address spot_author_ = msg.sender;  
+                    IAddressManager _AddressManager = IAddressManager(Parameters.getAddressManager());
+                    IRepManager _RepManager = IRepManager(Parameters.getRepManager());
+                    IRewardManager _RewardManager = IRewardManager(Parameters.getRewardManager());
+
+                    address spot_author_master_ = _AddressManager.FetchHighestMaster(spot_author_); // detect if it's a master address, or a subaddress
+
+                    uint256 rewardAmount = Parameters.get_SPOT_MIN_REWARD_SpotData()*(100)/InstantSpotRewardsDivider;
+                    uint256 repAmount = Parameters.get_SPOT_MIN_REP_SpotData()*(100)/InstantSpotRewardsDivider;
+                    
+                    require(_RepManager.mintReputationForWork(repAmount, spot_author_master_, ""), "could not reward REP in ValidateDataBatch, 2.a");
+                    require(_RewardManager.ProxyAddReward(rewardAmount, spot_author_master_), "could not reward token in ValidateDataBatch, 2.b");
+                   
+                }
+
+
+
+                IFollowingSystem _ComplianceSystem = IFollowingSystem(Parameters.getComplianceSystem());
+                try _ComplianceSystem.TriggerUpdate(){
+                } catch(bytes memory err) {
+                    emit BytesFailure(err);
+                }
+                IFollowingSystem _IndexingSystem = IFollowingSystem(Parameters.getIndexingSystem());
+                try _IndexingSystem.TriggerUpdate(){
+                } catch(bytes memory err) {
+                    emit BytesFailure(err);
+                }
+                IFollowingSystem _ArchivingSystem = IFollowingSystem(Parameters.getArchivingSystem());
+                try _ArchivingSystem.TriggerUpdate(){
+                } catch(bytes memory err) {
+                    emit BytesFailure(err);
+                }
+                // ---- Emit event
+                emit _SpotSubmitted(DataNonce, file_hash, URL_domain_, _selectedAddress);
+                
+            }
+            // -----------------------------------------------------------------
+            
+
         }
-        // -----------------------------------------------------------------
-        
+
         WorkerState storage worker_state = WorkersState[msg.sender];
         worker_state.last_interaction_date = block.timestamp;    
 
