@@ -22,13 +22,20 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
 
 
     address[] internal stakeholders;
-
+    mapping ( address => bool ) public isStakeholderMap;
+    mapping ( address => mapping ( address => uint256 )) public SystemsUserAllocations; // user -> worksystem -> amount
     
+
     struct Balances {
         uint256 free_balance;
         uint256 staked_balance;
         uint256 allocated_balance;
     }
+
+    uint256 public TotalAvailableStake = 0;
+    uint256 public TotalAllocatedStake = 0;
+    uint256 public TotalDeposited = 0;
+
 
     /**
      * Stakeholders account and balances
@@ -38,6 +45,8 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
     // ------------------------------------------------------------------------------------------
 
     mapping (address => bool) private StakeWhitelistMap; 
+    address[] public StakeWhitelistedAddress; 
+    mapping (address => uint256) private StakeWhitelistedAddressIndex; 
     // addresses of schemes/contracts allowed to interact with stakes
 
 
@@ -60,24 +69,31 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
     {
         require(StakeWhitelistMap[_address] != true, "Address must not be whitelisted already");
         StakeWhitelistMap[_address] = true;
+        StakeWhitelistedAddress.push(_address);
+        StakeWhitelistedAddressIndex[_address] = StakeWhitelistedAddress.length - 1;
         emit StakeWhitelisted(_address, true);
     }
 
     function removeAddress(address _address)
         public
         onlyOwner
-    {        
+    {
         require(StakeWhitelistMap[_address] != false, "Address must be whitelisted already");
         StakeWhitelistMap[_address] = false;
+
+        uint256 PrevIndex = StakeWhitelistedAddressIndex[_address];
+        StakeWhitelistedAddressIndex[_address] = 999999999;
+        
+        StakeWhitelistedAddress[PrevIndex] = StakeWhitelistedAddress[StakeWhitelistedAddress.length - 1]; // move last element
+        StakeWhitelistedAddressIndex[StakeWhitelistedAddress[PrevIndex]] = PrevIndex;
+        StakeWhitelistedAddress.pop();
+
         emit StakeUnWhitelisted(_address, false);        
     }
 
 
 
     // ---------- STAKES ----------
-
-    
-    bool internal locked;
 
     /**
      * @notice A method for a stakeholder to create a stake.
@@ -91,6 +107,9 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
         
         balances[msg.sender].free_balance = balances[msg.sender].free_balance.sub(_stake);
         balances[msg.sender].staked_balance = balances[msg.sender].staked_balance.add(_stake);
+
+        // Global state update
+        TotalAvailableStake = TotalAvailableStake.add(_stake);
     }
 
     /**
@@ -102,6 +121,10 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
         uint256 staked_amount = balances[msg.sender].staked_balance;
         balances[msg.sender].free_balance = balances[msg.sender].free_balance.add(staked_amount);
         balances[msg.sender].staked_balance = balances[msg.sender].staked_balance.sub(staked_amount);
+        
+        // Global state update
+        TotalAvailableStake = TotalAvailableStake.sub(staked_amount);
+        removeStakeholder(msg.sender);
     }
     
     
@@ -123,6 +146,11 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
         
         balances[_stakeholder].staked_balance = balances[_stakeholder].staked_balance.sub(_StakeAllocation);
         balances[_stakeholder].allocated_balance = balances[_stakeholder].allocated_balance.add(_StakeAllocation);
+
+        SystemsUserAllocations[_stakeholder][msg.sender] = SystemsUserAllocations[_stakeholder][msg.sender].add(_StakeAllocation);
+
+        // Global state update
+        TotalAllocatedStake = TotalAllocatedStake.add(_StakeAllocation);
         return(true);
     }
     
@@ -144,6 +172,10 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
         
         balances[_stakeholder].allocated_balance = balances[_stakeholder].allocated_balance.sub(_StakeToDeallocate);
         balances[_stakeholder].staked_balance = balances[_stakeholder].staked_balance.add(_StakeToDeallocate);
+
+        SystemsUserAllocations[_stakeholder][msg.sender] = SystemsUserAllocations[_stakeholder][msg.sender].sub(_StakeToDeallocate);
+        // Global state update
+        TotalAllocatedStake = TotalAllocatedStake.sub(_StakeToDeallocate);
         return(true);
     }
     
@@ -185,13 +217,7 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
         view
         returns(uint256)
     {
-        uint256 _totalStakes = 0;
-        for (uint256 s = 0; s < stakeholders.length; s += 1){
-            address user_address = stakeholders[s];
-            uint256 user_staked_amount = balances[user_address].staked_balance;
-            _totalStakes = _totalStakes.add(user_staked_amount);
-        }
-        return _totalStakes;
+        return TotalAvailableStake;
     }
     
     /**
@@ -203,51 +229,22 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
         view
         returns(uint256)
     {
-        uint256 _totalStakes = 0;
-        for (uint256 s = 0; s < stakeholders.length; s += 1){
-            address user_address = stakeholders[s];
-            uint256 user_alloc_amount = balances[user_address].allocated_balance;
-            _totalStakes = _totalStakes.add(user_alloc_amount);
-        }
-        return _totalStakes;
+        return TotalAllocatedStake;
     }
     
     /**
      * @notice A method to the aggregated stakes from all stakeholders.
      * @return uint256 The aggregated stakes from all stakeholders.
      */
-    function TotalAvailableStakes()
+    function TotalDeposit()
         public
         view
         returns(uint256)
     {
-        uint256 _totalStakes = 0;
-        for (uint256 s = 0; s < stakeholders.length; s += 1){
-            address user_address = stakeholders[s];
-            uint256 user_free_amount = balances[user_address].free_balance;
-            _totalStakes = _totalStakes.add(user_free_amount);
-        }
-        return _totalStakes;
+        return TotalDeposited;
     }
 
     // ---------- STAKEHOLDERS ----------
-
-    /**
-     * @notice A method to check if an address is a stakeholder.
-     * @param _address The address to verify.
-     * @return bool, uint256 Whether the address is a stakeholder, 
-     * and if so its position in the stakeholders array.
-     */
-    function isStakeholderIndex(address _address)
-        public
-        view
-        returns(bool, uint256)
-    {
-        for (uint256 s = 0; s < stakeholders.length; s += 1){
-            if (_address == stakeholders[s]) return (true, s);
-        }
-        return (false, 0);
-    }
 
     /**
      * @notice A method to check if an address is a stakeholder.
@@ -260,11 +257,9 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
         view
         returns(bool)
     {
-        for (uint256 s = 0; s < stakeholders.length; s += 1){
-            if (_address == stakeholders[s]) return true;
-        }
-        return false;
+        return isStakeholderMap[_address];
     }
+
     /**
      * @notice A method to add a stakeholder.
      * @param _stakeholder The stakeholder to add.
@@ -272,8 +267,7 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
     function addStakeholder(address _stakeholder)
         private
     {
-        (bool _isStakeholder, ) = isStakeholderIndex(_stakeholder);
-        if(!_isStakeholder) stakeholders.push(_stakeholder);
+        isStakeholderMap[_stakeholder] = true;
     }
 
     /**
@@ -283,11 +277,7 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
     function removeStakeholder(address _stakeholder)
         private
     {
-        (bool _isStakeholder, uint256 s) = isStakeholderIndex(_stakeholder);
-        if(_isStakeholder){
-            stakeholders[s] = stakeholders[stakeholders.length - 1];
-            stakeholders.pop();
-        } 
+        isStakeholderMap[_stakeholder] = false;
     }
 
     // ---------- DEPOSIT AND LOCKUP MECHANISMS ----------
@@ -317,7 +307,7 @@ contract StakingManager is Ownable { //, ReentrancyGuard  {
     
     function withdrawAll() public     
     {
-        require(balances[msg.sender].free_balance > 0);
+        require(balances[msg.sender].free_balance > 0, "not enough tokens to withdraw");
         require(token.transfer(msg.sender, balances[msg.sender].free_balance),"Token transfer failed");
         balances[msg.sender].free_balance = 0;
     }

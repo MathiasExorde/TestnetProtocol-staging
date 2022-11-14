@@ -154,7 +154,7 @@ interface IAddressManager {
 
 interface IFollowingSystem {
     function Ping(uint256 CheckedBatchId) external;        
-    function TriggerUpdate() external;    
+    function TriggerUpdate(uint256 iter) external;    
 }
 
 
@@ -278,7 +278,7 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     // ------ Spotting input flow management
     uint256 public LastAllocationTime = 0;
-    uint256 constant NB_TIMEFRAMES = 4;
+    uint256 constant NB_TIMEFRAMES = 15;
     TimeframeCounter[NB_TIMEFRAMES] public GlobalSpotFlowManager;
 
     // ------ User (workers) Submissions & Commitees Related Structures
@@ -308,6 +308,14 @@ contract DataSpotting is Ownable, RandomAllocator {
     address[] public availableWorkers;
     address[] public busyWorkers;   
     address[] public toUnregisterWorkers;   
+    mapping(address => bool) public isAvailableWorker;
+    mapping(address => bool) public isBusyWorker;
+    mapping(address => bool) public isToUnregisterWorker;    
+    mapping(address => uint256) public availableWorkersIndex;
+    mapping(address => uint256) public busyWorkersIndex;
+
+
+
     uint256 public LastRandomSeed = 0;
 
     // ------ Processes counters
@@ -329,8 +337,8 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     bool public InstantSpotRewards = true;
     uint256 public InstantSpotRewardsDivider = 10;
-
     uint256 public MaxPendingDataBatchCount = 100;
+    uint256 SPOT_FILE_SIZE = 100;
 
     // ------ Addresses & Interfaces
     IERC20 public token;
@@ -425,109 +433,68 @@ contract DataSpotting is Ownable, RandomAllocator {
         require(( success1 || success2 ), "receiver rejected _retrieveSFuel call");
     }
 
-    // modifier topUpSFuel {
-    //         _retrieveSFuel();
-    //         _;
-    // }
 
     // ----------------------------------------------------------------------------------
     //                          WORKER REGISTRATION & LOBBY MANAGEMENT
     // ----------------------------------------------------------------------------------
     
-    function isInAvailableWorkers(address _worker) internal view returns(bool){
-        bool found = false;
-        for(uint256 i = 0; i< availableWorkers.length; i++){
-            if(availableWorkers[i] == _worker){
-                found = true;
-                break;
-            }
-        }
-        return found;
+    function isInAvailableWorkers(address _worker) public view returns(bool){
+        return isAvailableWorker[_worker];
     }
 
-    function isInBusyWorkers(address _worker) internal view returns(bool){
-        bool found = false;
-        for(uint256 i = 0; i< busyWorkers.length; i++){
-            if(busyWorkers[i] == _worker){
-                found = true;
-                break;
-            }
-        }
-        return found;
+    function isInBusyWorkers(address _worker) public view returns(bool){
+        return isBusyWorker[_worker];
     }
 
-    function IsInLogoffList(address _worker) internal view returns(bool){
-        bool found = false;
-        for(uint256 i = 0; i< toUnregisterWorkers.length; i++){
-            if(toUnregisterWorkers[i] == _worker){
-                found = true;
-                break;
-            }
-        }
-        return found;
+    function IsInLogoffList(address _worker) public view returns(bool){
+        return isToUnregisterWorker[_worker];
     }
+
+
+    uint256 REMOVED_WORKER_INDEX_VALUE = 9999999999;
     
     function PopFromAvailableWorkers(address _worker) internal{
-        uint256 index = 0;
-        bool found = false;
-        for(uint256 i = 0; i< availableWorkers.length; i++){
-            if(availableWorkers[i] == _worker){
-                found = true;
-                index = i;
-                break;
-            }
-        }
-        if(found){
+        if(isAvailableWorker[_worker]){
+            uint256 index = availableWorkersIndex[_worker];
             availableWorkers[index] = availableWorkers[availableWorkers.length - 1];
             availableWorkers.pop();
+            // Update Worker State
+            isAvailableWorker[_worker] = false;
+            availableWorkersIndex[_worker] = REMOVED_WORKER_INDEX_VALUE;            
+            // Update moved item Index
+            availableWorkersIndex[availableWorkers[index]] = index;
         }
     }
 
     function PopFromBusyWorkers(address _worker) internal{
-        uint256 index = 0;
-        bool found = false;
-        for(uint256 i = 0; i< busyWorkers.length; i++){
-            if(busyWorkers[i] == _worker){
-                found = true;
-                index = i;
-                break;
-            }
-        }
-        if(found){
+        if(isBusyWorker[_worker]){
+            uint256 index = busyWorkersIndex[_worker];
             busyWorkers[index] = busyWorkers[busyWorkers.length - 1];
             busyWorkers.pop();
+            // Update Worker State
+            isBusyWorker[_worker] = false;
+            busyWorkersIndex[_worker] = REMOVED_WORKER_INDEX_VALUE;
         }
     }
 
     function PushInAvailableWorkers(address _worker) internal{    
         if(!isInAvailableWorkers(_worker)){
             availableWorkers.push(_worker);
+            // Update Worker State
+            isAvailableWorker[_worker] = true;
+            availableWorkersIndex[_worker] = availableWorkers.length - 1;
         }
     }
 
     function PushInBusyWorkers(address _worker) internal{    
         if(!isInBusyWorkers(_worker)){
             busyWorkers.push(_worker);
+            // Update Worker State
+            isBusyWorker[_worker] = true;
+            busyWorkersIndex[_worker] = busyWorkers.length - 1;
         }
     }
     
-    
-    function PopFromLogoffList(address _worker) internal{
-        uint256 index = 0;
-        bool found = false;
-        for(uint256 i = 0; i< toUnregisterWorkers.length; i++){
-            if(toUnregisterWorkers[i] == _worker){
-                found = true;
-                index = i;
-                break;
-            }
-        }
-        if(found){
-            toUnregisterWorkers[index] = toUnregisterWorkers[toUnregisterWorkers.length - 1];
-            toUnregisterWorkers.pop();
-        }
-    }
-
 
     function isWorkerAllocatedToBatch(uint256 _DataBatchId, address _worker) public view returns(bool){
         bool found = false;
@@ -543,6 +510,7 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     // Select Address for a worker address, between himself and a potential master & main (highest master) according to their Available Stakes
     function SelectAddressForUser(address _worker, uint256 _TokensAmountToAllocate) public view returns(address){
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");
         require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
         require(Parameters.getStakeManager() != address(0), "StakeManager is null in Parameters");
         IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
@@ -550,9 +518,9 @@ contract DataSpotting is Ownable, RandomAllocator {
 
         address _SelectedAddress = _worker;
         address _CurrentAddress = _worker;
-        uint256 iterations = 5;
+        uint256 _MaxIterations = 3;
 
-        while(_CurrentAddress != address(0) && (iterations > 0)){
+        for(uint256 i = 0 ; i < _MaxIterations; i++ ){
             // check if _CurrentAddress has enough available stake
             uint256 _CurrentAvailableStake = _StakeManager.AvailableStakedAmountOf(_CurrentAddress);
             
@@ -579,7 +547,10 @@ contract DataSpotting is Ownable, RandomAllocator {
             }
 
             _CurrentAddress = _AddressManager.getMaster(_CurrentAddress);
-            iterations -= 1;
+
+            if ( _CurrentAddress == address(0) ){
+                break; // quit the loop if we reached a "top" in the tree search
+            }
         }
 
         return _SelectedAddress;
@@ -591,6 +562,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     /* Register worker (online) */
     function RegisterWorker() public {
         WorkerState storage worker_state = WorkersState[msg.sender];
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");
         require((availableWorkers.length+busyWorkers.length) < Parameters.getMaxTotalWorkers(), "Maximum registered workers already");
         require( !worker_state.registered, "Worker is already registered (1)");
         require( !isInAvailableWorkers(msg.sender) && !isInBusyWorkers(msg.sender), "Worker is already registered (2)");
@@ -657,12 +629,12 @@ contract DataSpotting is Ownable, RandomAllocator {
                 /////////////////////////////////
                 worker_state.registered = false;
                 worker_state.unregistration_request = false;
-                PopFromLogoffList(worker_addr_);
                 PopFromAvailableWorkers(worker_addr_);
                 PopFromBusyWorkers(worker_addr_);
                 emit _WorkerUnregistered(worker_addr_, block.timestamp);
             }
         }
+        delete toUnregisterWorkers;
     }
 
     // ----------------------------------------------------------------------------------
@@ -707,13 +679,15 @@ contract DataSpotting is Ownable, RandomAllocator {
     //                          UPDATE SYSTEMS
     // ----------------------------------------------------------------------------------
 
-    function TriggerUpdate()  public {
+    function TriggerUpdate(uint256 n_iteration)  public {        
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");
         // Update the Spot Flow System
         updateGlobalSpotFlow();
         // Delete old data if needed
         deleteOldData();
-    
-        for(uint256 i=0; i<Parameters.get_MAX_UPDATE_ITERATIONS() ;i++){
+
+        uint256 iteration_count = Math.min(n_iteration, Parameters.get_MAX_UPDATE_ITERATIONS());
+        for(uint256 i=0; i< iteration_count ;i++){
             bool progress = false;
             // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
             if( DataBatch[BatchCheckingCursor].allocated_to_work == true 
@@ -724,6 +698,10 @@ contract DataSpotting is Ownable, RandomAllocator {
                 }
                 BatchCheckingCursor = BatchCheckingCursor.add(1);        
                 progress = true;
+            }        
+            if(!progress){
+                // break from the loop if no more progress is made when iterating (no batch to validate, no work to allocate)
+                break;
             }
         }
         
@@ -731,8 +709,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         processLogoffRequests();
 
         // Then iterate as much as possible in the batches.
-        if(  LastRandomSeed !=  getRandom() ){                
-            for(uint256 i=0; i<Parameters.get_MAX_UPDATE_ITERATIONS() ;i++){
+        if(  LastRandomSeed !=  getRandom() ){
+            for(uint256 i=0; i< iteration_count ;i++){
                 bool progress = false;
                 // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
                 if( DataBatch[AllocatedBatchCursor].allocated_to_work != true
@@ -767,7 +745,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     the CheckedData will be added to the APPROVED list of SpotCheckings
     @param _DataBatchId Integer identifier associated with target SpottedData
     */
-    function ValidateDataBatch(uint256 _DataBatchId) internal {
+    function ValidateDataBatch(uint256 _DataBatchId) internal {        
         require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
         require(Parameters.getRepManager() != address(0), "RepManager is null in Parameters");
         require(Parameters.getRewardManager() != address(0), "RewardManager is null in Parameters");
@@ -834,9 +812,13 @@ contract DataSpotting is Ownable, RandomAllocator {
         // IMPORTANT: AND IF MAJORITY EXISTS
         bool isCheckPassed = isPassed(_DataBatchId) && (AreStringsEqual(majorityNewFile,"") == false) && (majorityBatchCount != 0) ;
         // handle the fail case:
-        // make majorityBatchCount 100 for that case, for the rewards.
+        // make majorityBatchCount SPOT_FILE_SIZE for that case, for the rewards.
         if(!isCheckPassed){
-            majorityBatchCount = 100;
+            majorityBatchCount = SPOT_FILE_SIZE;
+        }
+        else{
+            // Cap the Batch Count if needed.
+            majorityBatchCount = Math.min(DataBatch[_DataBatchId].counter * SPOT_FILE_SIZE, majorityBatchCount); // Maximum Nb of files in batch * SPOT_FILE_SIZE
         }
 
         //-------- ADD MAX BATCH COUNT CHECK MECHANIM HERE? In case of abuse?
@@ -866,7 +848,6 @@ contract DataSpotting is Ownable, RandomAllocator {
                     IRewardManager _RewardManager = IRewardManager(Parameters.getRewardManager());
 
                     address worker_master_addr_ = _AddressManager.FetchHighestMaster(worker_addr_); // detect if it's a master address, or a subaddress
-
                     if( majorityBatchCount > 0 ){
                         require(_RepManager.mintReputationForWork(Parameters.get_SPOT_MIN_REP_DataValidation()*majorityBatchCount, worker_master_addr_, ""), "could not reward REP in Validate, 1.a");
                         require(_RewardManager.ProxyAddReward(Parameters.get_SPOT_MIN_REWARD_DataValidation()*majorityBatchCount, worker_master_addr_), "could not reward token in Validate, 1.b");
@@ -1040,6 +1021,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     // ----------------------------------------------------------------------------------
     
     function updateGlobalSpotFlow() public{
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");
         uint256 last_timeframe_idx_ = GlobalSpotFlowManager.length - 1;
         uint256 mostRecentTimestamp_ = GlobalSpotFlowManager[last_timeframe_idx_].timestamp;
         if( (block.timestamp - mostRecentTimestamp_) > Parameters.get_SPOT_TIMEFRAME_DURATION() ){
@@ -1063,7 +1045,8 @@ contract DataSpotting is Ownable, RandomAllocator {
     }
 
 
-    function updateUserSpotFlow(address user_) public{        
+    function updateUserSpotFlow(address user_) public{             
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");   
         // string[] memory proposedNewFiles = new string[](allocated_workers_.length);
         // TimeframeCounter[] storage UserSpotFlowManager = WorkersState[user_].spotflow_manager;
         TimeframeCounter[NB_TIMEFRAMES] storage UserSpotFlowManager = WorkersSpotFlowManager[user_];
@@ -1079,6 +1062,8 @@ contract DataSpotting is Ownable, RandomAllocator {
             UserSpotFlowManager[last_timeframe_idx_].timestamp = block.timestamp; 
             UserSpotFlowManager[last_timeframe_idx_].counter = 0; 
         }
+        
+        _retrieveSFuel();
     }
 
 
@@ -1103,7 +1088,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         string memory extra_
         )
     public returns (uint256 Dataid_)    
-    {        
+    {                
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");
         // ---- Spot Flow Management ---------------------------------------
         require(Parameters.get_SPOT_TOGGLE_ENABLED(), "Spotting is not currently enabled by Owner");
         require(file_hashs.length == URL_domains.length, "Spotting: input arrays must be of same length");
@@ -1165,9 +1151,6 @@ contract DataSpotting is Ownable, RandomAllocator {
                 TimeframeCounter[NB_TIMEFRAMES] storage UserSpotFlowManager = WorkersSpotFlowManager[_selectedAddress];
                 UserSpotFlowManager[UserSpotFlowManager.length-1].counter += 1;  
 
-                // ---- TRIGGER UPDATES ON ALL SYSTEMS ---- : DataSpotting() is the source of rythm in the WorkSystems pipeline
-                TriggerUpdate();           
-
                 
                 if ( InstantSpotRewards == true ){
 
@@ -1183,23 +1166,22 @@ contract DataSpotting is Ownable, RandomAllocator {
                     
                     require(_RepManager.mintReputationForWork(repAmount, spot_author_master_, ""), "could not reward REP in ValidateDataBatch, 2.a");
                     require(_RewardManager.ProxyAddReward(rewardAmount, spot_author_master_), "could not reward token in ValidateDataBatch, 2.b");
-                   
                 }
 
-
-
+                // ---- TRIGGER UPDATES ON ALL SYSTEMS ---- : DataSpotting() is the source of rythm in the WorkSystems pipeline
+                TriggerUpdate(1);
                 IFollowingSystem _ComplianceSystem = IFollowingSystem(Parameters.getComplianceSystem());
-                try _ComplianceSystem.TriggerUpdate(){
+                try _ComplianceSystem.TriggerUpdate(1){
                 } catch(bytes memory err) {
                     emit BytesFailure(err);
                 }
                 IFollowingSystem _IndexingSystem = IFollowingSystem(Parameters.getIndexingSystem());
-                try _IndexingSystem.TriggerUpdate(){
+                try _IndexingSystem.TriggerUpdate(1){
                 } catch(bytes memory err) {
                     emit BytesFailure(err);
                 }
                 IFollowingSystem _ArchivingSystem = IFollowingSystem(Parameters.getArchivingSystem());
-                try _ArchivingSystem.TriggerUpdate(){
+                try _ArchivingSystem.TriggerUpdate(1){
                 } catch(bytes memory err) {
                     emit BytesFailure(err);
                 }
@@ -1208,8 +1190,6 @@ contract DataSpotting is Ownable, RandomAllocator {
                 
             }
             // -----------------------------------------------------------------
-            
-
         }
 
         WorkerState storage worker_state = WorkersState[msg.sender];
@@ -1228,7 +1208,8 @@ contract DataSpotting is Ownable, RandomAllocator {
     */
     
     // batchId (int), encryptedHash (str), encryptedVote (str aussi j'imagine, c'est ta fonction x) ), nbDocuments (int), status (str)
-    function commitSpotCheck(uint256 _DataBatchId, bytes32 _encryptedHash, bytes32 _encryptedVote, uint256 _BatchCount, string memory _From) public {
+    function commitSpotCheck(uint256 _DataBatchId, bytes32 _encryptedHash, bytes32 _encryptedVote, uint256 _BatchCount, string memory _From) public {        
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");
         require(commitPeriodActive(_DataBatchId), "commit period needs to be open for this batchId");
         require(!UserChecksCommits[msg.sender][_DataBatchId], "User has already commited to this batchId");
         require(isWorkerAllocatedToBatch(_DataBatchId, msg.sender), "User needs to be allocated to this batch to commit on it");
@@ -1360,12 +1341,14 @@ contract DataSpotting is Ownable, RandomAllocator {
     @param _numTokens The number of ERC20 tokens desired in exchange for voting rights
     */
     function withdrawVotingRights(uint256 _numTokens, address _user) public {
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");
         uint256 availableTokens = SystemStakedTokenBalance[_user].sub(getLockedTokens(_user));
         require(availableTokens >= _numTokens, "availableTokens should be >= _numTokens");
                 
         IStakeManager _StakeManager = IStakeManager(Parameters.getStakeManager());
         require(_StakeManager.ProxyStakeDeallocate(_numTokens, _user), "Could not withdrawVotingRights through ProxyStakeDeallocate");
         SystemStakedTokenBalance[_user] -= _numTokens;
+        _retrieveSFuel();
         emit _VotingRightsWithdrawn(_numTokens, _user);
     }
 
@@ -1392,6 +1375,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         require(dllMap[msg.sender].contains(_DataBatchId), "dllMap: does not cointain _DataBatchId for the msg sender");
 
         dllMap[msg.sender].remove(_DataBatchId);
+        _retrieveSFuel();
         emit _TokensRescued(_DataBatchId, msg.sender);
     }
 
