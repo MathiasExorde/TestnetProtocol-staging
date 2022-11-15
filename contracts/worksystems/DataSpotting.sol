@@ -313,6 +313,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     mapping(address => bool) public isToUnregisterWorker;    
     mapping(address => uint256) public availableWorkersIndex;
     mapping(address => uint256) public busyWorkersIndex;
+    mapping(address => uint256) public toUnregisterWorkersIndex;    
 
 
 
@@ -337,8 +338,8 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     bool public InstantSpotRewards = true;
     uint256 public InstantSpotRewardsDivider = 10;
-    uint256 public MaxPendingDataBatchCount = 100;
-    uint256 SPOT_FILE_SIZE = 100;
+    uint256 public MaxPendingDataBatchCount = 200;
+    uint256 public SPOT_FILE_SIZE = 100;
 
     // ------ Addresses & Interfaces
     IERC20 public token;
@@ -356,7 +357,10 @@ contract DataSpotting is Ownable, RandomAllocator {
         token = IERC20(EXDT_token_);
     }
     
-    function destroyContract() public onlyOwner {
+    function destroyContract() 
+    public 
+    onlyOwner 
+    {
         selfdestruct(payable(owner()));
     }
 
@@ -367,19 +371,15 @@ contract DataSpotting is Ownable, RandomAllocator {
         Parameters = IParametersManager(addr);
     }
     
-    function updateBatchCheckingCursor(uint256 BatchCheckingCursor_)
-    public
-    onlyOwner
+    function updateSpotFileSize(uint256 file_size_) 
+    public 
+    onlyOwner 
     {
-        BatchCheckingCursor = BatchCheckingCursor_;
+        SPOT_FILE_SIZE = file_size_;
     }
 
-    function updateAllocatedBatchCursor(uint256 AllocatedBatchCursor_)
-    public
-    onlyOwner
-    {
-        AllocatedBatchCursor = AllocatedBatchCursor_;
-    }
+    // ============================================================================================================
+    // Testnet only : toggle-able instant rewards for spotting data
 
     // enables rewards on spotdata
     function updateInstantSpotRewards(bool state_, uint256 divider_)
@@ -455,25 +455,59 @@ contract DataSpotting is Ownable, RandomAllocator {
     
     function PopFromAvailableWorkers(address _worker) internal{
         if(isAvailableWorker[_worker]){
-            uint256 index = availableWorkersIndex[_worker];
-            availableWorkers[index] = availableWorkers[availableWorkers.length - 1];
-            availableWorkers.pop();
+            uint256 PreviousIndex = availableWorkersIndex[_worker];
+            address SwappedWorkerAtIndex = availableWorkers[availableWorkers.length - 1];
+
             // Update Worker State
             isAvailableWorker[_worker] = false;
-            availableWorkersIndex[_worker] = REMOVED_WORKER_INDEX_VALUE;            
-            // Update moved item Index
-            availableWorkersIndex[availableWorkers[index]] = index;
+            availableWorkersIndex[_worker] = REMOVED_WORKER_INDEX_VALUE;          // reset available worker index   
+            
+
+            if (availableWorkers.length >= 2){
+                availableWorkers[PreviousIndex] = SwappedWorkerAtIndex; // swap last worker to this new position
+                // Update moved item Index
+                availableWorkersIndex[SwappedWorkerAtIndex] = PreviousIndex;
+            }
+            
+            availableWorkers.pop(); // pop last worker
         }
     }
 
     function PopFromBusyWorkers(address _worker) internal{
-        if(isBusyWorker[_worker]){
-            uint256 index = busyWorkersIndex[_worker];
-            busyWorkers[index] = busyWorkers[busyWorkers.length - 1];
-            busyWorkers.pop();
+        if(isBusyWorker[_worker]){            
+            uint256 PreviousIndex = busyWorkersIndex[_worker];
+            address SwappedWorkerAtIndex = busyWorkers[busyWorkers.length - 1];
+
             // Update Worker State
             isBusyWorker[_worker] = false;
-            busyWorkersIndex[_worker] = REMOVED_WORKER_INDEX_VALUE;
+            busyWorkersIndex[_worker] = REMOVED_WORKER_INDEX_VALUE;          // reset available worker index   
+            
+            if (busyWorkers.length >= 2){
+                busyWorkers[PreviousIndex] = SwappedWorkerAtIndex; // swap last worker to this new position
+                // Update moved item Index
+                busyWorkersIndex[SwappedWorkerAtIndex] = PreviousIndex;
+            }
+
+            busyWorkers.pop(); // pop last worker
+        }
+    }
+
+    function PopFromLogoffList(address _worker) internal{
+        if(isToUnregisterWorker[_worker]){            
+            uint256 PreviousIndex = toUnregisterWorkersIndex[_worker];
+            address SwappedWorkerAtIndex = toUnregisterWorkers[toUnregisterWorkers.length - 1];
+
+            // Update Worker State
+            isToUnregisterWorker[_worker] = false;
+            toUnregisterWorkersIndex[_worker] = REMOVED_WORKER_INDEX_VALUE;          // reset available worker index   
+            
+            if (busyWorkers.length >= 2){
+                toUnregisterWorkers[PreviousIndex] = SwappedWorkerAtIndex; // swap last worker to this new position
+                // Update moved item Index
+                toUnregisterWorkersIndex[SwappedWorkerAtIndex] = PreviousIndex;
+            }
+
+            toUnregisterWorkers.pop(); // pop last worker
         }
     }
 
@@ -607,12 +641,15 @@ contract DataSpotting is Ownable, RandomAllocator {
             //////////////////////////////////
             worker_state.unregistration_request = true;
             toUnregisterWorkers.push(msg.sender);
+            isToUnregisterWorker[msg.sender] = true;
         }
         if( worker_state.allocated_work_batch == 0){   // only unregister a worker if he is not working             
             //////////////////////////////////
             PopFromAvailableWorkers(msg.sender);
             PopFromBusyWorkers(msg.sender);
-            worker_state.last_interaction_date = block.timestamp;
+            PopFromLogoffList(msg.sender);
+            worker_state.last_interaction_date = block.timestamp;            
+            isToUnregisterWorker[msg.sender] = false;
             worker_state.registered = false;
             emit _WorkerUnregistered(msg.sender, block.timestamp);
         }
@@ -631,6 +668,7 @@ contract DataSpotting is Ownable, RandomAllocator {
                 worker_state.unregistration_request = false;
                 PopFromAvailableWorkers(worker_addr_);
                 PopFromBusyWorkers(worker_addr_);
+                isToUnregisterWorker[worker_addr_] = false;
                 emit _WorkerUnregistered(worker_addr_, block.timestamp);
             }
         }
@@ -698,7 +736,7 @@ contract DataSpotting is Ownable, RandomAllocator {
                 }
                 BatchCheckingCursor = BatchCheckingCursor.add(1);        
                 progress = true;
-            }        
+            }
             if(!progress){
                 // break from the loop if no more progress is made when iterating (no batch to validate, no work to allocate)
                 break;
@@ -729,7 +767,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
         _retrieveSFuel();
     }
-
+	
 
     function AreStringsEqual(string memory _a, string memory _b) public pure returns(bool){
         if (keccak256(abi.encodePacked(_a)) == keccak256(abi.encodePacked(_b))) {
@@ -745,7 +783,8 @@ contract DataSpotting is Ownable, RandomAllocator {
     the CheckedData will be added to the APPROVED list of SpotCheckings
     @param _DataBatchId Integer identifier associated with target SpottedData
     */
-    function ValidateDataBatch(uint256 _DataBatchId) internal {        
+    function ValidateDataBatch(uint256 _DataBatchId) internal {       
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set."); 
         require(Parameters.getAddressManager() != address(0), "AddressManager is null in Parameters");
         require(Parameters.getRepManager() != address(0), "RepManager is null in Parameters");
         require(Parameters.getRewardManager() != address(0), "RewardManager is null in Parameters");
@@ -817,7 +856,7 @@ contract DataSpotting is Ownable, RandomAllocator {
             majorityBatchCount = SPOT_FILE_SIZE;
         }
         else{
-            // Cap the Batch Count if needed.
+            // Cap the Batch Count to [Maximum Nb of files in batch * SPOT_FILE_SIZE)]
             majorityBatchCount = Math.min(DataBatch[_DataBatchId].counter * SPOT_FILE_SIZE, majorityBatchCount); // Maximum Nb of files in batch * SPOT_FILE_SIZE
         }
 
@@ -1062,8 +1101,6 @@ contract DataSpotting is Ownable, RandomAllocator {
             UserSpotFlowManager[last_timeframe_idx_].timestamp = block.timestamp; 
             UserSpotFlowManager[last_timeframe_idx_].counter = 0; 
         }
-        
-        _retrieveSFuel();
     }
 
 
@@ -1307,16 +1344,15 @@ contract DataSpotting is Ownable, RandomAllocator {
             PushInAvailableWorkers(msg.sender);
         }
 
-        // Move directly to Validation if everyone revealed.
-        if(DataBatch[_DataBatchId].unrevealed_workers == 0){
-            ValidateDataBatch(_DataBatchId);
-        }
+        // // Move directly to Validation if everyone revealed.
+        // if(DataBatch[_DataBatchId].unrevealed_workers == 0){
+        //     ValidateDataBatch(_DataBatchId);
+        // }
 
         AllTxsCounter += 1;        
         _retrieveSFuel();
         emit _SpotCheckRevealed(_DataBatchId, numTokens, DataBatch[_DataBatchId].votesFor, DataBatch[_DataBatchId].votesAgainst, _clearVote, msg.sender);
     }
-
 
     // ================================================================================
     //                              STAKING & TOKEN INTERFACE
