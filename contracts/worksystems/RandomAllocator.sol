@@ -34,82 +34,62 @@ contract RandomAllocator {
         return r;
     }
 
+
     /**
      * @dev Return value
      * @return value of 'number'
      */
      function generateIntegers(uint256 _k, uint256 N_range) public view returns (uint256[] memory){
-        require(_k >= 0, "_k >= 0");
-        require(N_range > 0,"N_range > 0");
-        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp + uint256(keccak256(abi.encodePacked(getSeed())))+ ((uint256(keccak256(abi.encodePacked(block.coinbase))))))));
-        // uint256 b = 2531011;
+        require(   N_range > 0 && _k <= N_range && _k >= 1 ,"k or N are not OK for RNG" );
+        require(_k >= 1, "_k >= 0");
+        require(N_range >= 1,"N_range > 0");
+        uint256 seed = uint256(keccak256(abi.encodePacked(uint256(keccak256(abi.encodePacked(getRandom()))))));
         uint256[] memory integers = new uint256[](_k);
 
         uint256 c = 0;
-        uint256 l = 0;
-        uint256 max_iteration = N_range*10; 
-        while( c < _k ){
-            uint256 randNumber = (uint256(keccak256(abi.encodePacked(seed-25100011,l)))) % N_range;
+        uint256 nb_iterations = _k + 20;
+
+        for(uint256 l = 0; l < nb_iterations ; l++ ){
+            uint256 randNumber = (uint256(keccak256(abi.encodePacked(seed+l*l)))) % N_range;
             bool already_exists = false;
             // check if already generated
             for(uint256 i = 0; i < c ; i++){
                 if(integers[i] == randNumber){
                     already_exists = true;
                     break;
-                }            
+                }
             }
             if(!already_exists){
                 integers[c] = randNumber;
-                // integers[c] = l;
                 c = c + 1;
             }
-            l = l + 1;
-            if (l >= max_iteration){
+            if( c >= _k){
                 break;
             }
         }
 
+        if ( c < _k ){
+            for ( uint256 k = 0; k < N_range; k++ ){
+                uint256 newNumber = k;
+                bool already_exists = false;
+                for(uint256 i = 0; i < c ; i++){
+                    if(integers[i] == newNumber){
+                        already_exists = true;
+                        break;
+                    }
+                }
+                if(!already_exists){
+                    integers[c] = newNumber;
+                    c = c + 1;
+                }
+                if( c >= _k){
+                    break;
+                }
+            }
+        }
         require(c == _k,"RNG insufficient");
         return integers;
     }
-
-
-    // /**
-    //  * @dev Return value
-    //  * @return value of 'number'
-    //  */
-    // function shuffle_array_(uint256[] memory _myArray) private view returns(uint256[] memory){
-    //     require(_myArray.length > 0, "_myArray.length > 0");
-    //     uint256 a = _myArray.length;
-    //     uint256 b = _myArray.length;
-    //     for(uint256 i = 0; i< b ; i++){
-    //         uint256 randNumber =(uint256(keccak256
-    //         (abi.encodePacked(getRandom(),_myArray[i]))) % a)+1;
-    //         uint256 interim = _myArray[randNumber - 1];
-    //         _myArray[randNumber-1]= _myArray[a-1];
-    //         _myArray[a-1] = interim;
-    //         a = a-1;
-    //     }
-    //     uint256[] memory result;
-    //     result = _myArray;
-    //     return result;
-    // }
-
-    
-    // /**
-    //  * @dev Return value
-    //  * @return value of 'number'
-    //  */
-    // function reset_index_array(uint256[] memory _myArray) private pure returns(uint256[] memory){
-    //     uint256 N = _myArray.length;
-    //     for(uint256 i = 0; i<N ; i++){
-    //         _myArray[i] = i;
-    //     }
-    //     uint256[] memory result;
-    //     result = _myArray;
-    //     return result;
-    // }
-
 
 
     function random_selection(uint256 k, uint256 N) public view returns(uint256[] memory){

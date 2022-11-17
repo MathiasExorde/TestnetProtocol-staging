@@ -339,13 +339,14 @@ contract DataSpotting is Ownable, RandomAllocator {
     uint256 public InstantSpotRewardsDivider = 10;
     uint256 public MaxPendingDataBatchCount = 200;
     uint256 public SPOT_FILE_SIZE = 100;
+    bool public STAKING_REQUIREMENT_TOGGLE_ENABLED = false;
+    bool public TRIGGER_WITH_SPOTDATA_TOGGLE_ENABLED = false;
 
     // ------ Addresses & Interfaces
     IERC20 public token;
     IParametersManager public Parameters;
 
-    // ------ Governance spotting on/off
-    bool public STAKING_REQUIREMENT_TOGGLE_ENABLED = true;
+    
 
     // ============================================================================================================
     /**
@@ -382,6 +383,13 @@ contract DataSpotting is Ownable, RandomAllocator {
     onlyOwner 
     {
         STAKING_REQUIREMENT_TOGGLE_ENABLED = toggle_;
+    }
+
+    function toggleTriggerSpotData(bool toggle_) 
+    public 
+    onlyOwner 
+    {
+        TRIGGER_WITH_SPOTDATA_TOGGLE_ENABLED = toggle_;
     }
 
     // ============================================================================================================
@@ -775,6 +783,56 @@ contract DataSpotting is Ownable, RandomAllocator {
         
         }
         _retrieveSFuel();
+    }
+
+    
+    function TriggerAllocations(uint256 n_iteration)  public {        
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");
+        uint256 iteration_count = Math.min(n_iteration, Parameters.get_MAX_UPDATE_ITERATIONS());
+        // Log off waiting users first
+        processLogoffRequests(iteration_count);
+        // Then iterate as much as possible in the batches.
+        if(  LastRandomSeed !=  getRandom() ){
+            for(uint256 i=0; i< iteration_count ;i++){
+                bool progress = false;
+                // IF CURRENT BATCH IS COMPLETE AND NOT ALLOCATED TO WORKERS TO BE CHECKED, THEN ALLOCATE!
+                if( DataBatch[AllocatedBatchCursor].allocated_to_work != true
+                    && availableWorkers.length >= Parameters.get_SPOT_MIN_CONSENSUS_WORKER_COUNT()
+                    && DataBatch[AllocatedBatchCursor].complete
+                    && ((block.timestamp - LastAllocationTime) >= Parameters.get_SPOT_INTER_ALLOCATION_DURATION() )){ //nothing to allocate, waiting for this to end
+                    AllocateWork(); 
+                    progress = true;
+                }
+                if(!progress){
+                    // break from the loop if no more progress is made when iterating (no batch to validate, no work to allocate)
+                    break;
+                }
+            }
+        
+        }
+        _retrieveSFuel();
+    }
+	
+    function TriggerValidation(uint256 n_iteration)  public {
+        require(IParametersManager(address(0)) != Parameters,"Parameters Manager must be set.");
+        uint256 iteration_count = Math.min(n_iteration, Parameters.get_MAX_UPDATE_ITERATIONS());
+        for(uint256 i=0; i< iteration_count ;i++){
+            bool progress = false;
+            // IF CURRENT BATCH IS ALLOCATED TO WORKERS AND VOTE HAS ENDED, THEN CHECK IT & MOVE ON!
+            if( DataBatch[BatchCheckingCursor].allocated_to_work == true
+                && ( DataEnded(BatchCheckingCursor) || ( DataBatch[BatchCheckingCursor].unrevealed_workers == 0 ) )){
+                // check if the batch is already validated, if so, move on & increment BatchCheckingCursor
+                if ( DataBatch[BatchCheckingCursor].checked == false ){
+                    ValidateDataBatch(BatchCheckingCursor);
+                }
+                BatchCheckingCursor = BatchCheckingCursor.add(1);        
+                progress = true;
+            }
+            if(!progress){
+                // break from the loop if no more progress is made when iterating (no batch to validate, no work to allocate)
+                break;
+            }
+        }
     }
 	
 
@@ -1217,21 +1275,24 @@ contract DataSpotting is Ownable, RandomAllocator {
                 }
 
                 // ---- TRIGGER UPDATES ON ALL SYSTEMS ---- : DataSpotting() is the source of rythm in the WorkSystems pipeline
-                TriggerUpdate(1);
-                IFollowingSystem _ComplianceSystem = IFollowingSystem(Parameters.getComplianceSystem());
-                try _ComplianceSystem.TriggerUpdate(1){
-                } catch(bytes memory err) {
-                    emit BytesFailure(err);
-                }
-                IFollowingSystem _IndexingSystem = IFollowingSystem(Parameters.getIndexingSystem());
-                try _IndexingSystem.TriggerUpdate(1){
-                } catch(bytes memory err) {
-                    emit BytesFailure(err);
-                }
-                IFollowingSystem _ArchivingSystem = IFollowingSystem(Parameters.getArchivingSystem());
-                try _ArchivingSystem.TriggerUpdate(1){
-                } catch(bytes memory err) {
-                    emit BytesFailure(err);
+
+                if(TRIGGER_WITH_SPOTDATA_TOGGLE_ENABLED){
+                    TriggerUpdate(1);
+                    IFollowingSystem _ComplianceSystem = IFollowingSystem(Parameters.getComplianceSystem());
+                    try _ComplianceSystem.TriggerUpdate(1){
+                    } catch(bytes memory err) {
+                        emit BytesFailure(err);
+                    }
+                    IFollowingSystem _IndexingSystem = IFollowingSystem(Parameters.getIndexingSystem());
+                    try _IndexingSystem.TriggerUpdate(1){
+                    } catch(bytes memory err) {
+                        emit BytesFailure(err);
+                    }
+                    IFollowingSystem _ArchivingSystem = IFollowingSystem(Parameters.getArchivingSystem());
+                    try _ArchivingSystem.TriggerUpdate(1){
+                    } catch(bytes memory err) {
+                        emit BytesFailure(err);
+                    }
                 }
                 // ---- Emit event
                 emit _SpotSubmitted(DataNonce, file_hash, URL_domain_, _selectedAddress);
