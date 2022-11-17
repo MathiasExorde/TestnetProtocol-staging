@@ -1,5 +1,6 @@
 {
   "_urlSkale": "https://mainnet.skalenodes.com/v1/light-vast-diphda",
+  "_urlTxSkale": "https://mainnet.skalenodes.com/v1/light-vast-diphda",
   "_chainID": "2139927552",
   "_blockExplorer": "https://light-vast-diphda.explorer.mainnet.skalenodes.com/",
   "_fileStorage": "https://mainnet.skalenodes.com/fs/light-vast-diphda",
