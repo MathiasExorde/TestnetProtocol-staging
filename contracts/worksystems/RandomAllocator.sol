@@ -41,22 +41,22 @@ contract RandomAllocator {
      function generateIntegers(uint256 _k, uint256 N_range) public view returns (uint256[] memory){
         require(_k >= 0, "_k >= 0");
         require(N_range > 0,"N_range > 0");
-        
-
         uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp + uint256(keccak256(abi.encodePacked(getSeed())))+ ((uint256(keccak256(abi.encodePacked(block.coinbase))))))));
         // uint256 b = 2531011;
         uint256[] memory integers = new uint256[](_k);
 
         uint256 c = 0;
         uint256 l = 0;
+        uint256 max_iteration = N_range*10; 
         while( c < _k ){
             uint256 randNumber = (uint256(keccak256(abi.encodePacked(seed-25100011,l)))) % N_range;
             bool already_exists = false;
+            // check if already generated
             for(uint256 i = 0; i < c ; i++){
                 if(integers[i] == randNumber){
                     already_exists = true;
                     break;
-                }
+                }            
             }
             if(!already_exists){
                 integers[c] = randNumber;
@@ -64,67 +64,57 @@ contract RandomAllocator {
                 c = c + 1;
             }
             l = l + 1;
+            if (l >= max_iteration){
+                break;
+            }
         }
 
+        require(c == _k,"RNG insufficient");
         return integers;
     }
 
 
-    /**
-     * @dev Return value
-     * @return value of 'number'
-     */
-    function shuffle_array_(uint256[] memory _myArray) private view returns(uint256[] memory){
-        require(_myArray.length > 0, "_myArray.length > 0");
-        uint256 a = _myArray.length;
-        uint256 b = _myArray.length;
-        for(uint256 i = 0; i< b ; i++){
-            uint256 randNumber =(uint256(keccak256
-            (abi.encodePacked(getRandom(),_myArray[i]))) % a)+1;
-            uint256 interim = _myArray[randNumber - 1];
-            _myArray[randNumber-1]= _myArray[a-1];
-            _myArray[a-1] = interim;
-            a = a-1;
-        }
-        uint256[] memory result;
-        result = _myArray;
-        return result;
-    }
+    // /**
+    //  * @dev Return value
+    //  * @return value of 'number'
+    //  */
+    // function shuffle_array_(uint256[] memory _myArray) private view returns(uint256[] memory){
+    //     require(_myArray.length > 0, "_myArray.length > 0");
+    //     uint256 a = _myArray.length;
+    //     uint256 b = _myArray.length;
+    //     for(uint256 i = 0; i< b ; i++){
+    //         uint256 randNumber =(uint256(keccak256
+    //         (abi.encodePacked(getRandom(),_myArray[i]))) % a)+1;
+    //         uint256 interim = _myArray[randNumber - 1];
+    //         _myArray[randNumber-1]= _myArray[a-1];
+    //         _myArray[a-1] = interim;
+    //         a = a-1;
+    //     }
+    //     uint256[] memory result;
+    //     result = _myArray;
+    //     return result;
+    // }
 
     
-    /**
-     * @dev Return value
-     * @return value of 'number'
-     */
-    function reset_index_array(uint256[] memory _myArray) private pure returns(uint256[] memory){
-        uint256 N = _myArray.length;
-        for(uint256 i = 0; i<N ; i++){
-            _myArray[i] = i;
-        }
-        uint256[] memory result;
-        result = _myArray;
-        return result;
-    }
+    // /**
+    //  * @dev Return value
+    //  * @return value of 'number'
+    //  */
+    // function reset_index_array(uint256[] memory _myArray) private pure returns(uint256[] memory){
+    //     uint256 N = _myArray.length;
+    //     for(uint256 i = 0; i<N ; i++){
+    //         _myArray[i] = i;
+    //     }
+    //     uint256[] memory result;
+    //     result = _myArray;
+    //     return result;
+    // }
 
-
-    function shuffle_array(uint256 N) public view returns(uint256[] memory){
-        require(N > 0, "N > 0");
-        uint256[] memory indexArray = new uint256[](N);
-        uint256[] memory  array = shuffle_array_(reset_index_array(indexArray));
-        uint256[] memory result;
-        result = array;
-        return result;
-    }
 
 
     function random_selection(uint256 k, uint256 N) public view returns(uint256[] memory){
-        require(   N > 0 && k <= N && k >= 1 ,"k or N are not OK during random selection" );
-        uint256[] memory indexArray = new uint256[](N);
-        uint256[] memory resultArray = new uint256[](k);
-        uint256[] memory array = shuffle_array_(reset_index_array(indexArray));
-        for(uint256 i = 0; i < k; i++){
-            resultArray[i] = array[i];
-        }
+        require(   N > 0 && k <= N && k >= 1 ,"k or N are not OK for RNG" );
+        uint256[] memory resultArray = generateIntegers(k, N);
         return resultArray;
     }
 }

@@ -303,7 +303,6 @@ contract DataSpotting is Ownable, RandomAllocator {
     mapping(address => uint256) public SystemStakedTokenBalance; // maps user's address to voteToken balance
 
     // ------ Worker management structures
-    mapping(address => address[]) public MasterWorkers;
     mapping(uint256 => address[]) public WorkersPerBatch;
     address[] public availableWorkers;
     address[] public busyWorkers;   
@@ -346,7 +345,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     IParametersManager public Parameters;
 
     // ------ Governance spotting on/off
-    bool public SPOT_TOGGLE_ENABLED = true;
+    bool public STAKING_REQUIREMENT_TOGGLE_ENABLED = true;
 
     // ============================================================================================================
     /**
@@ -376,6 +375,13 @@ contract DataSpotting is Ownable, RandomAllocator {
     onlyOwner 
     {
         SPOT_FILE_SIZE = file_size_;
+    }
+
+    function toggleRequiredStaking(bool toggle_) 
+    public 
+    onlyOwner 
+    {
+        STAKING_REQUIREMENT_TOGGLE_ENABLED = toggle_;
     }
 
     // ============================================================================================================
@@ -609,13 +615,15 @@ contract DataSpotting is Ownable, RandomAllocator {
 
         // ---  Master/SubWorker Stake Management        
         //_numTokens The number of tokens to be committed towards the target SpottedData
-        uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
-        address _selectedAddress = SelectAddressForUser(msg.sender, _numTokens);
-        // if tx sender has a master, then interact with his master's stake, or himself
-        if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
-            uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
-            requestAllocatedStake(remainder, _selectedAddress);
-        }        
+        if( STAKING_REQUIREMENT_TOGGLE_ENABLED ){
+            uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
+            address _selectedAddress = SelectAddressForUser(msg.sender, _numTokens);
+            // if tx sender has a master, then interact with his master's stake, or himself
+            if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
+                uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
+                requestAllocatedStake(remainder, _selectedAddress);
+            }   
+        }     
         //////////////////////////////////
         
         PushInAvailableWorkers(msg.sender);
@@ -658,7 +666,8 @@ contract DataSpotting is Ownable, RandomAllocator {
         _retrieveSFuel();
     }
 
-    function processLogoffRequests() internal{
+    function processLogoffRequests(uint256 n_iteration) internal{
+        uint256 iteration_count = Math.min(n_iteration, toUnregisterWorkers.length);
         for (uint256 i = 0; i < toUnregisterWorkers.length; i++) {
             address worker_addr_ = toUnregisterWorkers[i];
             WorkerState storage worker_state = WorkersState[worker_addr_];
@@ -744,7 +753,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
         
         // Log off waiting users first
-        processLogoffRequests();
+        processLogoffRequests(iteration_count);
 
         // Then iterate as much as possible in the batches.
         if(  LastRandomSeed !=  getRandom() ){
@@ -1143,13 +1152,15 @@ contract DataSpotting is Ownable, RandomAllocator {
   
         if (  getUserPeriodSpotCount(_selectedAddress) < Parameters.get_SPOT_MAX_SPOT_PER_USER_PER_PERIOD() 
               && getGlobalPeriodSpotCount() < Parameters.get_SPOT_GLOBAL_MAX_SPOT_PER_PERIOD() 
-              && ( AllocatedBatchCursor - BatchCheckingCursor ) <= MaxPendingDataBatchCount){
+              && ( LastBatchCounter - BatchCheckingCursor  ) <= MaxPendingDataBatchCount){
                     
-            // ---  Master/SubWorker Stake Management        
-            // if tx sender has a master, then interact with his master's stake, or himself
-            if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
-                uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
-                requestAllocatedStake(remainder, _selectedAddress);
+            if( STAKING_REQUIREMENT_TOGGLE_ENABLED ){
+                // ---  Master/SubWorker Stake Management        
+                // if tx sender has a master, then interact with his master's stake, or himself
+                if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
+                    uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
+                    requestAllocatedStake(remainder, _selectedAddress);
+                }
             }
             
             // -----------------------------------------------------------------
@@ -1256,12 +1267,14 @@ contract DataSpotting is Ownable, RandomAllocator {
         //_numTokens The number of tokens to be committed towards the target SpottedData
         uint256 _numTokens = Parameters.get_SPOT_MIN_STAKE();       
         address _selectedAddress = SelectAddressForUser(msg.sender, _numTokens);
-        // if tx sender has a master, then interact with his master's stake, or himself
-        if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
-            uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
-            requestAllocatedStake(remainder, _selectedAddress);
+        
+        if( STAKING_REQUIREMENT_TOGGLE_ENABLED ){
+            // if tx sender has a master, then interact with his master's stake, or himself
+            if (SystemStakedTokenBalance[_selectedAddress] < _numTokens){
+                uint256 remainder = _numTokens.sub(SystemStakedTokenBalance[_selectedAddress]);
+                requestAllocatedStake(remainder, _selectedAddress);
+            }
         }
-          
 
         uint256 _prevDataID = 0;
 
