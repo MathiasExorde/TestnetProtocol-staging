@@ -35,7 +35,7 @@ contract RewardsManager is Ownable {
     IParametersManager public Parameters;
 
     constructor(
-        address EXD_token /*Avatar _avatar*/
+        address EXD_token
     ) {
         token = IERC20(EXD_token);
     }
@@ -88,23 +88,6 @@ contract RewardsManager is Ownable {
         return (false);
     }
 
-    // /**
-    //  * @notice A method for a verified whitelisted contract to allocate for itself some Rewards // nonReentrant()
-    //  */
-    // function ProxyTransferRewards(address _user, address _recipient)
-    //     external
-    //     returns(bool)
-    // {
-    //     require(isRewardsWhitelisted(msg.sender), "RewardsManager: sender must be whitelisted to Proxy act");
-    //     // check if the contract calling this method has rights to allocate from user Rewards
-    //     uint256 user_rewards_ = rewards[_user];
-    //     if(user_rewards_ > 0){
-    //         rewards[_user] = rewards[_user].sub(user_rewards_);
-    //         rewards[_recipient] = rewards[_recipient].add(user_rewards_);
-    //         return true;
-    //     }
-    //     return(false);
-    // }
 
     function RewardsBalanceOf(address _address) public view returns (uint256) {
         return rewards[_address];
