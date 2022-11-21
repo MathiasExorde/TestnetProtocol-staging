@@ -2,14 +2,11 @@
 
 pragma solidity ^0.8.0;
 
-
-
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract ConfigRegistry is Ownable{
-
+contract ConfigRegistry is Ownable {
     mapping(bytes32 => string) internal ConfigFiles;
 
     // ------------------------------------------------------------------------------------------
@@ -22,10 +19,10 @@ contract ConfigRegistry is Ownable{
     constructor() {
         string memory x = "db_hash";
         bytes32 key = keccak256(bytes(x));
-        ConfigFiles[key] = "Qmc2tw8ZwERMRmyGU1cywPDsMLkQvkNEwRuECUHnUucLnh";        
+        ConfigFiles[key] = "Qmc2tw8ZwERMRmyGU1cywPDsMLkQvkNEwRuECUHnUucLnh";
         x = "lang_detector_hash";
         key = keccak256(bytes(x));
-        ConfigFiles[key] = "Qmbxy6YMd1HNDoKDdGTAKYdVBuUGUkA17aQVYdtHJv6fzd";     
+        ConfigFiles[key] = "Qmbxy6YMd1HNDoKDdGTAKYdVBuUGUkA17aQVYdtHJv6fzd";
         x = "censoring_detector_hash";
         key = keccak256(bytes(x));
         ConfigFiles[key] = "QmbZzVcCwfhK4jYqUWR7yYFiT2YcRQ67yXHoXt7jefZjrF";
@@ -46,37 +43,44 @@ contract ConfigRegistry is Ownable{
         ConfigFiles[key] = "QmPY8zU6xzwvjomzN5AkVfTa5zZp2RkXg2eM34vPECqotY";
         x = "japaneseDictHash";
         key = keccak256(bytes(x));
-        ConfigFiles[key] = "QmfUzRtqVL9tqG11DpbJVBNoKjxQMyVuqv2uv2pinzucT6";       
+        ConfigFiles[key] = "QmfUzRtqVL9tqG11DpbJVBNoKjxQMyVuqv2uv2pinzucT6";
     }
 
     // ------------------------------------------------------------------------------------------
 
-    function add(string calldata key, string calldata value, bool overwrite) public onlyOwner returns (bool) {
-            bytes32 hash = keccak256(abi.encodePacked(key));
-            // overwrite existing entries only if the overwrite flag is set 
-            // or if a lookup returns length 0 at that location. 
-            if (overwrite || bytes(ConfigFiles[hash]).length == 0) {
-                ConfigFiles[hash] = value;
-                return true;
-            }
-            return false;
-        }
-    
-    function addByHash(bytes32 hash, string calldata value, bool overwrite) public onlyOwner returns (bool) {
+    function add(
+        string calldata key,
+        string calldata value,
+        bool overwrite
+    ) public onlyOwner returns (bool) {
+        bytes32 hash = keccak256(abi.encodePacked(key));
+        // overwrite existing entries only if the overwrite flag is set
+        // or if a lookup returns length 0 at that location.
         if (overwrite || bytes(ConfigFiles[hash]).length == 0) {
             ConfigFiles[hash] = value;
             return true;
         }
         return false;
     }
-    
+
+    function addByHash(
+        bytes32 hash,
+        string calldata value,
+        bool overwrite
+    ) public onlyOwner returns (bool) {
+        if (overwrite || bytes(ConfigFiles[hash]).length == 0) {
+            ConfigFiles[hash] = value;
+            return true;
+        }
+        return false;
+    }
+
     function get(string calldata key) public view returns (string memory) {
-            bytes32 hash = keccak256(abi.encodePacked(key));
+        bytes32 hash = keccak256(abi.encodePacked(key));
         return ConfigFiles[hash];
     }
-    
+
     function getHash(string calldata key) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(key));
     }
-    
 }
