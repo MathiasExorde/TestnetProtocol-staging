@@ -316,6 +316,7 @@ contract DataSpotting is Ownable, RandomAllocator {
     uint256 public LastAllocationTime = 0;
     uint256 constant NB_TIMEFRAMES = 15;
     TimeframeCounter[NB_TIMEFRAMES] public GlobalSpotFlowManager;
+    TimeframeCounter[NB_TIMEFRAMES] public ItemFlowManager;
 
     // ------ User (workers) Submissions & Commitees Related Structures
     mapping(address => mapping(uint256 => bool)) public UserChecksCommits; 
@@ -369,6 +370,7 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     // ------ Statistics related counters
     uint256 public AllTxsCounter = 0;
+    uint256 public AllItemCounter = 0;
     uint256 public AcceptedBatchsCounter = 0;
     uint256 public RejectedBatchsCounter = 0;
     uint256 public NotCommitedCounter = 0;
@@ -890,6 +892,7 @@ contract DataSpotting is Ownable, RandomAllocator {
         require(IParametersManager(address(0)) != Parameters, "Parameters Manager must be set.");
         // Update the Spot Flow System
         updateGlobalSpotFlow();
+        updateItemCount();
         // Delete old data if needed
         deleteOldData();
         TriggerValidation(iteration_count);
@@ -1228,8 +1231,13 @@ contract DataSpotting is Ownable, RandomAllocator {
         }
         // ---------------- GLOBAL STATE UPDATE ----------------
         AllTxsCounter += 1;
+        AllItemCounter += DataBatch[_DataBatchId].item_count;
+        ItemFlowManager[ItemFlowManager.length - 1].counter +=  DataBatch[_DataBatchId].item_count;
+        updateItemCount();
         NotCommitedCounter += DataBatch[_DataBatchId].uncommited_workers;
         NotRevealedCounter += DataBatch[_DataBatchId].unrevealed_workers;
+
+
         emit _BatchValidated(_DataBatchId, majorityNewFile, isCheckPassed);
     }
 
@@ -1349,6 +1357,36 @@ contract DataSpotting is Ownable, RandomAllocator {
         uint256 total = 0;
         for (uint256 i = 0; i < GlobalSpotFlowManager.length; i++) {
             total += GlobalSpotFlowManager[i].counter;
+        }
+        return total;
+    }
+
+
+    /**
+  @notice Update the global sliding counter of validated data, measuring the URL per TIMEFRAME (hour)
+  */
+    function updateItemCount() public {
+        require(IParametersManager(address(0)) != Parameters, "Parameters Manager must be set.");
+        uint256 last_timeframe_idx_ = ItemFlowManager.length - 1;
+        uint256 mostRecentTimestamp_ = ItemFlowManager[last_timeframe_idx_].timestamp;
+        if ((block.timestamp - mostRecentTimestamp_) > Parameters.get_SPOT_TIMEFRAME_DURATION()) {
+            // cycle & move periods to the left
+            for (uint256 i = 0; i < (ItemFlowManager.length - 1); i++) {
+                ItemFlowManager[i] = ItemFlowManager[i + 1];
+            }
+            //update last timeframe with new values & reset counter
+            ItemFlowManager[last_timeframe_idx_].timestamp = block.timestamp;
+            ItemFlowManager[last_timeframe_idx_].counter = 0;
+        }
+    }
+
+    /**
+  @notice Count the total spots per TIMEFRAME (hour)
+  */
+    function getPeriodItemCount() public view returns (uint256) {
+        uint256 total = 0;
+        for (uint256 i = 0; i < ItemFlowManager.length; i++) {
+            total += ItemFlowManager[i].counter;
         }
         return total;
     }
@@ -2091,10 +2129,18 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     /**
   @notice getCounter
-  @return Counter of the last Dataed a user started
+  @return Counter of all "accepted transactions"
   */
     function getTxCounter() public view returns (uint256 Counter) {
         return AllTxsCounter;
+    }
+
+    /**
+  @notice getCounter
+  @return Counter of the last Dataed a user started
+  */
+    function getItemCounter() public view returns (uint256 Counter) {
+        return AllItemCounter;
     }
 
     /**
