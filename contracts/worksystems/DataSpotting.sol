@@ -2062,32 +2062,32 @@ contract DataSpotting is Ownable, RandomAllocator {
     }
 
     /**
-  @notice getUserDatas
-  @return user_Datas the array of Datas started by the user
+  @notice Get User Submitted Data (Spots)
+  @return user_Datas the array of Data Spotted/Submitted by the user
   */
     function getUserDatas(address user) public view returns (uint256[] memory user_Datas) {
         return UserSubmissions[user];
     }
 
     /**
-  @notice getLastDataId
-  @return DataId of the last Dataed a user started
+  @notice get Last Data Id
+  @return DataId
   */
     function getLastDataId() public view returns (uint256 DataId) {
         return DataNonce;
     }
 
     /**
-  @notice getLastBatchId
-  @return LastBatchId of the last Dataed a user started
+  @notice get Last Batch Id
+  @return LastBatchId
   */
     function getLastBatchId() public view returns (uint256 LastBatchId) {
         return LastBatchCounter;
     }
 
     /**
-  @notice getLastBachDataId
-  @return LastCheckedBatchId of the last Dataed a user started
+  @notice get Last Checked Batch Id
+  @return LastCheckedBatchId
   */
     function getLastCheckedBatchId() public view returns (uint256 LastCheckedBatchId) {
         return BatchCheckingCursor;
@@ -2095,15 +2095,15 @@ contract DataSpotting is Ownable, RandomAllocator {
 
     /**
   @notice getLastAllocatedBatchId
-  @return LastAllocatedBatchId of the last Dataed a user started
+  @return LastAllocatedBatchId
   */
     function getLastAllocatedBatchId() public view returns (uint256 LastAllocatedBatchId) {
         return AllocatedBatchCursor;
     }
 
     /**
-  @notice getLastBachDataId
-  @return batch of the last Dataed a user started
+  @notice get DataBatch By ID
+  @return batch as BatchMetadata struct
   */
     function getBatchByID(uint256 _DataBatchId) public view returns (BatchMetadata memory batch) {
         require(DataExists(_DataBatchId));
@@ -2111,8 +2111,8 @@ contract DataSpotting is Ownable, RandomAllocator {
     }
 
     /**
-  @notice getLastBachDataId
-  @return batch of the last Dataed a user started
+  @notice get Batch IPFS File By ID
+  @return batch IPFS File
   */
     function getBatchIPFSFileByID(uint256 _DataBatchId) public view returns (string memory batch) {
         require(DataExists(_DataBatchId));
@@ -2120,8 +2120,8 @@ contract DataSpotting is Ownable, RandomAllocator {
     }
 
     /**
-  @notice getLastBachDataId
-  @return data of the last Dataed a user started
+  @notice get Data By ID
+  @return data as SpottedData struct
   */
     function getDataByID(uint256 _DataId) public view returns (SpottedData memory data) {
         return SpotsMapping[_DataId];
