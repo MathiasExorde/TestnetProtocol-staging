@@ -957,10 +957,10 @@ contract DataSpotting is Ownable, RandomAllocator {
                 // check if the batch is already validated
                 if (DataBatch[CurrentCursor].checked == false) {
                     ValidateDataBatch(CurrentCursor);
-                    // increment BatchCheckingCursor if possible
-                    if (CurrentCursor == BatchCheckingCursor + 1) {
-                        BatchCheckingCursor = BatchCheckingCursor.add(1);
-                    }
+                }
+                // increment BatchCheckingCursor if possible
+                if (CurrentCursor == BatchCheckingCursor + 1) {
+                    BatchCheckingCursor = BatchCheckingCursor.add(1);
                 }
             }
         }
