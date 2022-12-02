@@ -3,5 +3,5 @@
    "_urlTxSkale":"https://legacy-proxy.skalenodes.com/v1/light-vast-diphda",
    "_chainID":"2139927552",
    "_blockExplorer":"http://light-vast-diphda.legacy-explorer.skalenodes.com/",
-   "_wss":"wss://legacy-proxy.skalenodes.com/v1/ws/light-vast-diphda"
+   "_webSocket":"wss://legacy-proxy.skalenodes.com/v1/ws/light-vast-diphda"
 }
