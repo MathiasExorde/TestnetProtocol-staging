@@ -2,5 +2,6 @@
    "_urlSkale":"http://35.84.228.194:10259/",
    "_urlTxSkale":"https://legacy-proxy.skalenodes.com/v1/light-vast-diphda",
    "_chainID":"2139927552",
-   "_blockExplorer":"http://light-vast-diphda.legacy-explorer.skalenodes.com/"
+   "_blockExplorer":"http://light-vast-diphda.legacy-explorer.skalenodes.com/",
+   "_wss":"wss://legacy-proxy.skalenodes.com/v1/ws/light-vast-diphda"
 }
