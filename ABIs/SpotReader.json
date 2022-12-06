@@ -2,17 +2,52 @@
 	{
 		"inputs": [
 			{
+				"internalType": "address",
+				"name": "DataSpotting_",
+				"type": "address"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "uint256",
-				"name": "_DataBatchId",
+				"name": "_DataBatchId_a",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_DataBatchId_b",
 				"type": "uint256"
 			}
 		],
-		"name": "DataExists",
+		"name": "getBatchsFilesByID",
 		"outputs": [
 			{
-				"internalType": "bool",
-				"name": "exists",
-				"type": "bool"
+				"internalType": "string[]",
+				"name": "",
+				"type": "string[]"
 			}
 		],
 		"stateMutability": "view",
@@ -22,11 +57,16 @@
 		"inputs": [
 			{
 				"internalType": "uint256",
-				"name": "",
+				"name": "_DataId_a",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_DataId_b",
 				"type": "uint256"
 			}
 		],
-		"name": "WorkersPerBatch",
+		"name": "getSpotAuthorsByID",
 		"outputs": [
 			{
 				"internalType": "address[]",
@@ -41,88 +81,16 @@
 		"inputs": [
 			{
 				"internalType": "uint256",
-				"name": "_DataBatchId",
+				"name": "_DataBatchId_a",
 				"type": "uint256"
 			}
 		],
-		"name": "getBatchByID",
+		"name": "getWorkersPerBatch",
 		"outputs": [
 			{
-				"components": [
-					{
-						"internalType": "uint256",
-						"name": "start_idx",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "counter",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "uncommited_workers",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "unrevealed_workers",
-						"type": "uint256"
-					},
-					{
-						"internalType": "bool",
-						"name": "complete",
-						"type": "bool"
-					},
-					{
-						"internalType": "bool",
-						"name": "checked",
-						"type": "bool"
-					},
-					{
-						"internalType": "bool",
-						"name": "allocated_to_work",
-						"type": "bool"
-					},
-					{
-						"internalType": "uint256",
-						"name": "commitEndDate",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "revealEndDate",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "votesFor",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "votesAgainst",
-						"type": "uint256"
-					},
-					{
-						"internalType": "string",
-						"name": "batchIPFSfile",
-						"type": "string"
-					},
-					{
-						"internalType": "uint256",
-						"name": "item_count",
-						"type": "uint256"
-					},
-					{
-						"internalType": "enum ISpottingSystem.DataStatus",
-						"name": "status",
-						"type": "uint8"
-					}
-				],
-				"internalType": "struct ISpottingSystem.BatchMetadata",
-				"name": "batch",
-				"type": "tuple"
+				"internalType": "address[]",
+				"name": "",
+				"type": "address[]"
 			}
 		],
 		"stateMutability": "view",
@@ -132,75 +100,57 @@
 		"inputs": [
 			{
 				"internalType": "uint256",
-				"name": "_DataBatchId",
+				"name": "_DataBatchId_a",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "i",
 				"type": "uint256"
 			}
 		],
-		"name": "getBatchIPFSFileByID",
+		"name": "getWorkersPerBatch2",
 		"outputs": [
 			{
-				"internalType": "string",
-				"name": "batch",
-				"type": "string"
+				"internalType": "address",
+				"name": "",
+				"type": "address"
 			}
 		],
 		"stateMutability": "view",
 		"type": "function"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_DataId",
-				"type": "uint256"
-			}
-		],
-		"name": "getDataByID",
+		"inputs": [],
+		"name": "owner",
 		"outputs": [
 			{
-				"components": [
-					{
-						"internalType": "string",
-						"name": "ipfs_hash",
-						"type": "string"
-					},
-					{
-						"internalType": "address",
-						"name": "author",
-						"type": "address"
-					},
-					{
-						"internalType": "uint256",
-						"name": "timestamp",
-						"type": "uint256"
-					},
-					{
-						"internalType": "uint256",
-						"name": "item_count",
-						"type": "uint256"
-					},
-					{
-						"internalType": "string",
-						"name": "URL_domain",
-						"type": "string"
-					},
-					{
-						"internalType": "string",
-						"name": "extra",
-						"type": "string"
-					},
-					{
-						"internalType": "enum ISpottingSystem.DataStatus",
-						"name": "status",
-						"type": "uint8"
-					}
-				],
-				"internalType": "struct ISpottingSystem.SpottedData",
-				"name": "data",
-				"type": "tuple"
+				"internalType": "address",
+				"name": "",
+				"type": "address"
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	}
 ]
