@@ -3,16 +3,46 @@
 		"inputs": [
 			{
 				"internalType": "address",
-				"name": "_owner",
+				"name": "Reputation_",
 				"type": "address"
 			}
 		],
-		"name": "balanceOf",
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address[]",
+				"name": "users",
+				"type": "address[]"
+			}
+		],
+		"name": "getManyReputations",
 		"outputs": [
 			{
-				"internalType": "uint256",
-				"name": "balance",
-				"type": "uint256"
+				"internalType": "uint256[]",
+				"name": "",
+				"type": "uint256[]"
 			}
 		],
 		"stateMutability": "view",
@@ -21,9 +51,9 @@
 	{
 		"inputs": [
 			{
-				"internalType": "address",
-				"name": "_owner",
-				"type": "address"
+				"internalType": "address[]",
+				"name": "users",
+				"type": "address[]"
 			},
 			{
 				"internalType": "uint256",
@@ -31,12 +61,12 @@
 				"type": "uint256"
 			}
 		],
-		"name": "balanceOfAt",
+		"name": "getManyReputationsAt",
 		"outputs": [
 			{
-				"internalType": "uint256",
+				"internalType": "uint256[]",
 				"name": "",
-				"type": "uint256"
+				"type": "uint256[]"
 			}
 		],
 		"stateMutability": "view",
@@ -44,15 +74,35 @@
 	},
 	{
 		"inputs": [],
-		"name": "totalSupply",
+		"name": "owner",
 		"outputs": [
 			{
-				"internalType": "uint256",
+				"internalType": "address",
 				"name": "",
-				"type": "uint256"
+				"type": "address"
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	}
 ]
