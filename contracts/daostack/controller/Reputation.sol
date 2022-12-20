@@ -1,6 +1,7 @@
-pragma solidity 0.5.17;
+// SPDX-License-Identifier: GPL-3.0
+pragma solidity 0.8.8;
 
-import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 // Copied from @daostack/infra/contracts/Reputation.sol and added the MintMultiple function
 
@@ -19,6 +20,11 @@ contract Reputation is Ownable {
     // Event indicating burning of reputation for an address.
     event Burn(address indexed _from, uint256 _amount);
 
+    // Store new Reputation checkpoint every 200 000 blocks (by default, updatable below)
+    // Can become a problem after 200 million blocks.
+    uint256 public checkpoint_interval = 200000; 
+    uint256 public global_checkpoint_interval = 1000; 
+
     // @dev `Checkpoint` is the structure that attaches a block number to a
     //  given value, the block number attached is the one that last changed the
     //  value
@@ -29,6 +35,9 @@ contract Reputation is Ownable {
         uint128 value;
     }
 
+    address[] public _addresses;
+    mapping(address => bool) public IsAddressSeen; 
+
     // `balances` is the map that tracks the balance of each address, in this
     //  contract when the balance changes the block number that the change
     //  occurred is also included in the map
@@ -36,6 +45,54 @@ contract Reputation is Ownable {
 
     // Tracks the history of the `totalSupply` of the reputation
     Checkpoint[] private totalSupplyHistory;
+
+    /**
+     * @dev Destroy Contract, important to release storage space if critical
+     */
+    function destroyContract() public onlyOwner {
+        selfdestruct(payable(owner()));
+    }
+
+    /**
+  * @dev Returns all worker addresses between index A_ and index B
+  * @param A_ Address of user to check against
+  * @param B_ Integer identifier associated with target SpottedData
+  * @return workers array of workers of size (B_-A_+1)
+  */
+    function getAllWorkersBetweenIndex(uint256 A_, uint256 B_) public view returns (address[] memory workers) {
+        require(B_>= A_, " _B must be >= _A");
+        require(B_<= (_addresses.length -1), " B_ is out of bounds");
+        uint256 _array_size = B_ - A_+1;
+        address[] memory address_list = new address[](_array_size);
+        for (uint256 i = 0; i < _array_size; i++) {
+            address_list[i] = _addresses[i+A_];
+        }
+        return address_list;
+    }
+
+    /**
+  * @notice get _addresses length
+  * @return length of the array
+  */
+    function getAllWorkersLength() public view returns (uint256 length) {
+        return _addresses.length;
+    }
+
+
+    // @notice Update the checkpoint invercal (in block count)
+    // @param new_interval_ New interval amount in blocks
+    function updateCheckpointInterval(uint256 new_interval_) public onlyOwner {
+        require(new_interval_ > 1000, "new interval must be > 1000");
+        checkpoint_interval = new_interval_;
+    }
+
+    // @notice Update the global checkpoint invercal (in block count)
+    // @param new_global_interval_ New global interval amount in blocks
+    function updateGlobalCheckpointInterval(uint256 new_global_interval_) public onlyOwner {
+        require(new_global_interval_ > 1000, "new interval must be > 1000");
+        global_checkpoint_interval = new_global_interval_;
+    }
+
 
     // @notice Generates `_amount` reputation that are assigned to `_owner`
     // @param _user The address that will be assigned the new reputation
@@ -46,8 +103,14 @@ contract Reputation is Ownable {
         require(curTotalSupply + _amount >= curTotalSupply); // Check for overflow
         uint256 previousBalanceTo = balanceOf(_user);
         require(previousBalanceTo + _amount >= previousBalanceTo); // Check for overflow
-        updateValueAtNow(totalSupplyHistory, curTotalSupply + _amount);
-        updateValueAtNow(balances[_user], previousBalanceTo + _amount);
+
+        if ( !IsAddressSeen[_user] ){
+            _addresses.push(_user);
+            IsAddressSeen[_user] = true;
+        }
+
+        updateValueAtNow(totalSupplyHistory, curTotalSupply + _amount, global_checkpoint_interval);
+        updateValueAtNow(balances[_user], previousBalanceTo + _amount, checkpoint_interval);
         emit Mint(_user, _amount);
         return true;
     }
@@ -62,8 +125,8 @@ contract Reputation is Ownable {
             require(curTotalSupply + _amount[i] >= curTotalSupply); // Check for overflow
             uint256 previousBalanceTo = balanceOf(_user[i]);
             require(previousBalanceTo + _amount[i] >= previousBalanceTo); // Check for overflow
-            updateValueAtNow(totalSupplyHistory, curTotalSupply + _amount[i]);
-            updateValueAtNow(balances[_user[i]], previousBalanceTo + _amount[i]);
+            updateValueAtNow(totalSupplyHistory, curTotalSupply + _amount[i], global_checkpoint_interval);
+            updateValueAtNow(balances[_user[i]], previousBalanceTo + _amount[i], checkpoint_interval);
             emit Mint(_user[i], _amount[i]);
         }
         return true;
@@ -80,8 +143,8 @@ contract Reputation is Ownable {
         if (previousBalanceFrom < amountBurned) {
             amountBurned = previousBalanceFrom;
         }
-        updateValueAtNow(totalSupplyHistory, curTotalSupply - amountBurned);
-        updateValueAtNow(balances[_user], previousBalanceFrom - amountBurned);
+        updateValueAtNow(totalSupplyHistory, curTotalSupply - amountBurned, global_checkpoint_interval);
+        updateValueAtNow(balances[_user], previousBalanceFrom - amountBurned, checkpoint_interval);
         emit Burn(_user, amountBurned);
         return true;
     }
@@ -162,20 +225,26 @@ contract Reputation is Ownable {
         }
         return checkpoints[min].value;
     }
-
+    
     // @dev `updateValueAtNow` used to update the `balances` map and the
     //  `totalSupplyHistory`
     // @param checkpoints The history of data being updated
     // @param _value The new number of reputation
-    function updateValueAtNow(Checkpoint[] storage checkpoints, uint256 _value) internal {
+    function updateValueAtNow(Checkpoint[] storage checkpoints, uint256 _value, uint256 checkpoint_interval_) internal {
         require(uint128(_value) == _value); //check value is in the 128 bits bounderies
-        if ((checkpoints.length == 0) || (checkpoints[checkpoints.length - 1].fromBlock < block.number)) {
-            Checkpoint storage newCheckPoint = checkpoints[checkpoints.length++];
+        // Important: Do not add new value everytime there is a new block (storage consideration), 
+        // Add only every "checkpoint_interval_" block, at most.
+        if ( (checkpoints.length == 0) 
+            || ( block.number > checkpoint_interval_ )
+            && ( checkpoints[checkpoints.length - 1].fromBlock < (block.number - checkpoint_interval_) )) {
+            Checkpoint memory newCheckPoint; // = checkpoints[checkpoints.length++];
             newCheckPoint.fromBlock = uint128(block.number);
             newCheckPoint.value = uint128(_value);
+            checkpoints.push(newCheckPoint);
         } else {
             Checkpoint storage oldCheckPoint = checkpoints[checkpoints.length - 1];
             oldCheckPoint.value = uint128(_value);
         }
     }
+
 }
