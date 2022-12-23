@@ -1,7 +1,7 @@
 {
-   "_urlSkale":"http://35.84.228.194:10259/",
-   "_urlSkale2":"http://57.128.81.82:10259/",
-   "_urlTxSkale":"https://legacy-proxy.skalenodes.com/v1/light-vast-diphda",
+   "_urlSkale":"http://35.84.228.194:10195/",
+   "_urlSkale2":"http://35.84.228.194:10195/",
+   "_urlTxSkale":"https://legacy-proxy.skalenodes.com/#/chains/wan-tasty-kitalpha",
    "_chainID":"2139927552",
    "_blockExplorer":"http://wan-tasty-kitalpha.legacy-explorer.skalenodes.com/",
    "_webSocket":"wss://legacy-proxy.skalenodes.com/v1/ws/light-vast-diphda"
