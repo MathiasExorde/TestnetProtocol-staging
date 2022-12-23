@@ -9,7 +9,7 @@
    "RewardsManager":"0xe221bE54c5Ac0F16885f65De957Eed022eDB11a7",
    "Parameters":"0x1791bE54d4b3Af415fc11af8FeE953937F024d79",
    "AddressManager":"0x1454673b09dDAF9CaEFc7aeAd599dC7D26DcB49f",
-   "Statistics":"0x938A7453b6164ec4fC4417695570f6cd74bA12bC",
+   "Statistics":"0xF2e7936113D1B90c7946F677dE9E4275aAbb7C71",
    "DataSpotting":"0x4CaE6234D9d9522Fee63B0Be95fF1AC13Ba34E7f",
    "RegistrarWalletScheme":"0xa9D04aaAd526A93eaEB2B205fd814A6183e22499",
    "MasterWalletScheme":"0x999dfE2Ae5797fd0a440Ee55027ff5efe12cEb90",
