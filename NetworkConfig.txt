@@ -1,6 +1,7 @@
 {
    "_urlSkale":"http://35.84.228.194:10195/",
    "_urlSkale2":"http://44.230.146.249:10195/",
+   "_urlSkale3":"http://57.128.81.82:10259/",
    "_urlTxSkale":"https://legacy-proxy.skalenodes.com/v1/wan-tasty-kitalpha",
    "_chainID":"355367913",
    "_blockExplorer":"http://wan-tasty-kitalpha.legacy-explorer.skalenodes.com/",
