@@ -15,5 +15,5 @@
    "MasterWalletScheme":"0xDb8A552BC19afE1218C40aE2C94e1bCb9EdA8588",
    "QuickWalletScheme":"0x32dbb0e3E217b3925A2621F2975DbD20a9540a4e",
    "ReputationReader":"0xCF03BDcbC0f0794509d151caECAe48bD8557f717",
-   "sFuelDistribute":"0x78803929c49F161a023f61dfbA00C782372B80c7",
+   "sFuelDistribute":"0x78803929c49F161a023f61dfbA00C782372B80c7"
 }
