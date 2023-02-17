@@ -1,7 +1,6 @@
 {
          "_networkId":"testnet-A",
-         "_urlSkale":"https://soft-legitimate-sarin-sync.skaletest.com/",
-         "_urlSkale1":"https://soft-legitimate-sarin-sync.skaletest.com/",
+         "_urlSkale":"http://57.128.84.254:10259",
          "_urlSkale1":"http://57.128.84.254:10259",
          "_urlSkale2":"http://57.128.80.82:10259",
          "_urlSkale3":"http://35.84.228.194:10259",
@@ -13,8 +12,8 @@
          "_urlSkale9":"http://152.228.211.160:10259",
          "_urlSkale10":"http://152.228.215.238:10259",
          "SyncNodeCount":"10",
-         "_urlTxSkale":"https://legacy-proxy.skalenodes.com/v1/soft-legitimate-sarin",
-         "_chainID":"797272215",
-         "_blockExplorer":"https://soft-legitimate-sarin.legacy-explorer.skalenodes.com/",
-         "_webSocket":"wss://legacy-proxy.skalenodes.com/v1/ws/soft-legitimate-sarin"
+         "_urlTxSkale":"https://legacy-proxy.skalenodes.com/v1/tough-sour-sneaky-skale",
+         "_chainID":"982921378",
+         "_blockExplorer":"https://tough-sour-sneaky-skale.legacy-explorer.skalenodes.com/",
+         "_webSocket":"wss://legacy-proxy.skalenodes.com/v1/ws/tough-sour-sneaky-skale"
 }
